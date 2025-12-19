@@ -6,6 +6,15 @@ let guid = 'df8f1874-245e-44b6-b017-0a69eeb5c231'
 let xmetar_result_uid = 'xmetar_result_uid';
 const prefixes = ['xmetar'];
 
+// Helper conversion functions
+
+function mps2kt(mps) { return mps * 0.868976; }
+function miles2meters(miles) { return miles * 1609.344; }
+function meters2miles(meter) { return meter / 1609.344; }
+function celsius2fahrenheit(celsius) { return celsius * 1.8 + 32; }
+function inhg2hpa(inhg) { return inhg * 33.863889532611; }
+function hpa2inhg(hpa) { return hpa * 0.02952998057228; }
+
 function fixWindUnits(unit) {
     if (unit === "MPS") {
         console.log("Wind unit " + unit + ". Please report");
@@ -14,7 +23,7 @@ function fixWindUnits(unit) {
     }
 }
 
-
+// METAR parsing function
 function parse_metar(metar) {
     // Example METAR: KJFK 121651Z 18015G25KT 10SM FEW020 SCT250 30/22 A2992 RMK AO2 SLP134 T03000217
 
@@ -87,7 +96,33 @@ function parse_metar(metar) {
                 break;
             case 3:
                 // Visibility
-                mode = 4;
+                match = metar_parts[i].match(/^(\d+)(?:\/(\d+))?(SM)?$/);
+                metar_data.visibility = {};
+                if (metar_parts[i] === "CAVOK") {
+                    metar_data.visibility.m = 9999;
+                    metar_data.visibility.sm = 10;
+                } else if (match) {
+                    // AaoCmd.log(match[0] + "-" + match[1] + "-" + match[2] + "-" + match[3]);
+                    if (match[3]) { // unit is SM
+                        if (match[2]) { // visibility contains a fraction
+                            metar_data.visibility.sm = Number(match[1])/Number(match[2]);
+                            // var whole = Math.floor(match[1] / match[2]);
+                            // var part = match[1] % match[2];
+                            // metar_data.visibility.sm, String) = "" + (whole == 0 ? "" : whole + " ") + part + "/" + match[2];
+                        } else { // visibility contains a whole number.
+                            metar_data.visibility.sm = Number(match[1]);
+                        }
+
+                        metar_data.visibility.m = Math.ceil(miles2meters(metar_data.visibility.sm));
+                    } else { // no unit -> meters
+                        // AaoCmd.log(match[0] + "-" + match[1] + " " + match[2] + " " + match[3]);
+                        metar_data.visibility.m = match[1];
+                        metar_data.visibility.sm = metar_data.visibility.m == 9999 ? 10 : meters2miles(metar_data.visibility.m);
+                    }
+                    mode = 4;
+                } else {
+                    console.log("No vis match");
+                }
                 break;
             case 4:
                 // Weather conditions
@@ -133,6 +168,7 @@ function parse_metar(metar) {
     // }
 }
 
+// Main search function for Flow Pro
 search(prefixes, (query, callback) => {
     xmetar_result = {
         uid: xmetar_result_uid,
