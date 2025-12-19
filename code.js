@@ -73,7 +73,7 @@ function parse_metar(metar) {
                     match = metar_parts[i].match(/^(\d\d\d|VRB)P?(\d+)(?:G(\d+))?(KT|MPS|KMH)/);
                     if (match) {
                         metar_data.wind = {};
-                        metar_data.wind.degrees = match[1] === "VRB" ? 180 : match[1];
+                        metar_data.wind.degrees = match[1] === "VRB" ? "VRB" : match[1];
                         metar_data.wind.speed = Number(match[2]);
                         metar_data.wind.gusts = (match[3] && match[3].length > 0 ? Number(match[3]) : null);
 
@@ -84,7 +84,7 @@ function parse_metar(metar) {
                             metar_data.wind.degrees.to = Number(match2[2]);
                             i += 1;
                         }
-                        // fixWindUnits(match[4]);
+                        // fixWindUnits(match[4]); // TODO: implement unit conversion if needed, but in which case?
 
                         mode = 3;
                     } else {
@@ -102,20 +102,19 @@ function parse_metar(metar) {
                     metar_data.visibility.m = 9999;
                     metar_data.visibility.sm = 10;
                 } else if (match) {
-                    // AaoCmd.log(match[0] + "-" + match[1] + "-" + match[2] + "-" + match[3]);
                     if (match[3]) { // unit is SM
                         if (match[2]) { // visibility contains a fraction
                             metar_data.visibility.sm = Number(match[1])/Number(match[2]);
+                            // TODO: if you want to keep the string format
                             // var whole = Math.floor(match[1] / match[2]);
                             // var part = match[1] % match[2];
-                            // metar_data.visibility.sm, String) = "" + (whole == 0 ? "" : whole + " ") + part + "/" + match[2];
+                            // metar_data.visibility.sm_string = "" + (whole == 0 ? "" : whole + " ") + part + "/" + match[2];
                         } else { // visibility contains a whole number.
                             metar_data.visibility.sm = Number(match[1]);
                         }
 
                         metar_data.visibility.m = Math.ceil(miles2meters(metar_data.visibility.sm));
                     } else { // no unit -> meters
-                        // AaoCmd.log(match[0] + "-" + match[1] + " " + match[2] + " " + match[3]);
                         metar_data.visibility.m = match[1];
                         metar_data.visibility.sm = metar_data.visibility.m == 9999 ? 10 : meters2miles(metar_data.visibility.m);
                     }
@@ -138,6 +137,19 @@ function parse_metar(metar) {
                 break;
             case 6:
                 // Temperature
+                match = metar_parts[i].match(/^(M?\d+)\/(M?\d+)$/);
+                if (match) {
+                    metar_data.temp = { temp: {}, dew: {} };
+                    console.log(`xMETAR: Temperature match: ${match[1]} / ${match[2]}`);
+                    match[1] = Number(match[1].replace('M', '-'));
+                    match[2] = Number(match[2].replace('M', '-'));
+                    metar_data.temp.temp.c = match[1];
+                    metar_data.temp.dew.c = match[2];
+                    metar_data.temp.temp.f = celsius2fahrenheit(match[1]);
+                    metar_data.temp.dew.f = celsius2fahrenheit(match[2]);
+                    mode = 7;
+                }
+
                 break;
             case 7:
                 // Pressure
@@ -146,26 +158,6 @@ function parse_metar(metar) {
     }
 
     return metar_data;
-
-    // let icao = metar_parts[0];
-    // let time = metar_parts[1];
-    // let wind = metar_parts[2];
-    // let visibility = metar_parts[3];
-    // let weather = '';
-    // let sky_conditions = [];
-    // let temperature = '';
-    // let pressure = '';  
-    // for (let part of metar_parts.slice(4)) {
-    //     if (part.match(/^[0-9]{2}\/[0-9]{2}$/)) {
-    //         temperature = part;
-    //     } else if (part.startsWith('A') && part.length == 5) {
-    //         pressure = part;
-    //     } else if (part.match(/^(FEW|SCT|BKN|OVC)[0-9]{3}$/)) {
-    //         sky_conditions.push(part);
-    //     } else {
-    //         weather += part + ' ';
-    //     }
-    // }
 }
 
 // Main search function for Flow Pro
