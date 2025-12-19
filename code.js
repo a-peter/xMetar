@@ -34,13 +34,15 @@ function parse_metar(metar) {
 
     let mode = 0, match;
     let metar_data = {};
+    metar_data.clouds = [];
+    metar_data.conditions = [];
     for (let i = 0; i < metar_parts.length; i++) {
         // Preconditions for missing parts
         if (mode < 3 && metar_parts[i].match(/^(\d+)(?:\/(\d+))?(SM)?$/)) { // /^[0-9]{2}\/[0-9]{2}$/
             mode = 3; // no wind reported
             console.log('No wind reported');
         }
-        if (mode < 5 && metar_parts[i].match(/^(FEW|SCT|BKN|OVC|NCD)\s+?/)) {
+        if (mode < 5 && metar_parts[i].match(/^(FEW|SCT|BKN|OVC|NCD|NSC)(\d+)?/)) {
             mode = 5; // no visibility or conditions reported
             console.log('No visibility reported');
         }
@@ -98,9 +100,10 @@ function parse_metar(metar) {
                 // Visibility
                 match = metar_parts[i].match(/^(\d+)(?:\/(\d+))?(SM)?$/);
                 metar_data.visibility = {};
-                if (metar_parts[i] === "CAVOK") {
+                if (metar_parts[i] === "CAVOK" || metar_parts[i] === "CLR") {
                     metar_data.visibility.m = 9999;
                     metar_data.visibility.sm = 10;
+                    mode = 5; // no clouds & no conditions reported
                 } else if (match) {
                     if (match[3]) { // unit is SM
                         if (match[2]) { // visibility contains a fraction
@@ -124,15 +127,26 @@ function parse_metar(metar) {
                 }
                 break;
             case 4:
-                // Weather conditions
-                if (metar_parts[i].match(/^(FEW|SCT|BKN|OVC|NCD)\s+?/)) {
-                    mode = 5;
+                // Conditions
+                match = metar_parts[i].match(/^(\+|-|VC|RE)?([A-Z][A-Z])([A-Z][A-Z])?([A-Z][A-Z])?$/);
+                if (match) {
+                    console.log(`Condition match: ${match}`);
+                    match
+                        .filter((m, index) => {
+                            return index !== 0 && m;
+                        })
+                        .forEach((m) => {
+                            metar_data.conditions.push({ code: m });
+                        });
+                    // may occur multiple times
                 }
                 break;
             case 5:
-                // Sky conditions
-                if (metar_parts[i].match(/(^(M?\d+)\/(M?\d+)$)|(^\/\/\/\/\/)/)) {
-                    mode = 6;
+                // Clouds
+                match = metar_parts[i].match(/^(FEW|SCT|BKN|OVC|NCD|NSC)(\d+)?/);
+                if (match) {
+                    metar_data.clouds.push({'code': match[1], 'height': match[2] ? Number(match[2]) * 100 : null});
+                    // may occur multiple times
                 }
                 break;
             case 6:
@@ -140,7 +154,7 @@ function parse_metar(metar) {
                 match = metar_parts[i].match(/^(M?\d+)\/(M?\d+)$/);
                 if (match) {
                     metar_data.temp = { temp: {}, dew: {} };
-                    console.log(`xMETAR: Temperature match: ${match[1]} / ${match[2]}`);
+                    // console.log(`xMETAR: Temperature match: ${match[1]} / ${match[2]}`);
                     match[1] = Number(match[1].replace('M', '-'));
                     match[2] = Number(match[2].replace('M', '-'));
                     metar_data.temp.temp.c = match[1];
@@ -149,10 +163,21 @@ function parse_metar(metar) {
                     metar_data.temp.dew.f = celsius2fahrenheit(match[2]);
                     mode = 7;
                 }
-
                 break;
             case 7:
                 // Pressure
+                match = metar_parts[i].match(/^(Q|A)(\d+)/);
+                if (match) {
+                    metar_data.press = {};
+                    if (match[1] === "Q") {
+                        metar_data.press.hpa = Number(match[2]);
+                        metar_data.press.inhg = Math.round(hpa2inhg(Number(match[2])) * 100) / 100;
+                    } else {
+                        metar_data.press.hpa = Math.round(inhg2hpa(Number(match[2]) / 100));
+                        metar_data.press.inhg = Number(match[2]) / 100;
+                    }
+                    mode = 8;
+                }
                 break;
         }
     }
