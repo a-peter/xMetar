@@ -343,20 +343,47 @@ function drawCircle(ctx, x, y, radius, color) {
     ctx.fillStyle = color;
     ctx.fill();
 }
-function drawRunway(ctx, cx, cy, r, angleDeg) {
-  const a = degToRad(angleDeg);
+function drawRunwayText(ctx, x, y, text) {
+  ctx.save();
+  ctx.font = "bold 14px sans-serif";
+  ctx.fillStyle = "#000";
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  ctx.fillText(text, x, y);
+  ctx.restore();
+}
+function runwayLabelPositions(cx, cy, r, angleDeg) {
+  const d = r * 0.88;
+  const angleRad = degToRad(angleDeg);
+  return [
+    {
+      x: cx + Math.cos(angleRad) * d,
+      y: cy + Math.sin(angleRad) * d,
+    },
+    {
+      x: cx - Math.cos(angleRad) * d,
+      y: cy - Math.sin(angleRad) * d,
+    }
+  ];
+}
+function drawRunway(ctx, cx, cy, r, angleDeg, primary, secondary) {
+    const a = degToRad(angleDeg);
 
-  const x1 = cx + Math.cos(a) * r;
-  const y1 = cy + Math.sin(a) * r;
-  const x2 = cx - Math.cos(a) * r;
-  const y2 = cy - Math.sin(a) * r;
+    const x1 = cx + Math.cos(a) * r;
+    const y1 = cy + Math.sin(a) * r;
+    const x2 = cx - Math.cos(a) * r;
+    const y2 = cy - Math.sin(a) * r;
 
-  ctx.beginPath();
-  ctx.moveTo(x1, y1);
-  ctx.lineTo(x2, y2);
-  ctx.strokeStyle = "#555";
-  ctx.lineWidth = 20;
-  ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(x1, y1);
+    ctx.lineTo(x2, y2);
+    ctx.strokeStyle = "#555";
+    ctx.lineWidth = 10;
+    ctx.stroke();
+
+    const [p1, p2] = runwayLabelPositions(cx, cy, r, angleDeg);
+    drawRunwayText(ctx, p1.x, p1.y, primary);
+    drawRunwayText(ctx, p2.x, p2.y, secondary);
 }
 function drawArrow(ctx, x, y, angle, length) {
   ctx.save();
@@ -402,10 +429,10 @@ function doRender(airport, metar) {
     // console.log(`Airport runways: ${JSON.stringify(airport)}`);
     for (const runway of airport.runways) {
         console.log(`Drawing runway at ${runway.direction}`);
-        // drawRunway(this.ctx, cx, cy, radius,  degToRad(runway.direction));
+        drawRunway(this.ctx, cx, cy, radius,  runway.direction + 90, runway.primaryName, runway.secondaryName);
         // drawRunway(this.ctx, cx, cy, radius, (runway.direction + 180) % 360);
     }
-    drawRunway(this.ctx, cx, cy, radius, 45);
+    // drawRunway(this.ctx, cx, cy, radius, 60 + 90);
     // drawRunway(this.ctx, cx, cy, radius, 90);
     drawWind(this.ctx, cx, cy, radius, degToRad(60));
 }
