@@ -287,7 +287,7 @@ search(prefixes, (query, callback) => {
                     xmetar_result.is_note = true;
 
                     metar = parse_metar(metar_callback.metarString);
-                    console.log('Parsed METAR: ' + JSON.stringify(metar));
+                    // console.log('Parsed METAR: ' + JSON.stringify(metar));
 
                     const container = document.createElement('div');
                     container.innerHTML = `${metar.icao}`;
@@ -366,8 +366,11 @@ function runwayLabelPositions(cx, cy, r, angleDeg) {
     }
   ];
 }
-function drawRunway(ctx, cx, cy, r, angleDeg, primary, secondary) {
-    const a = degToRad(angleDeg);
+function drawRunway(ctx, cx, cy, r, runway) {
+    // runway.direction + 90, runway.primaryName, runway.secondaryName
+    console.log(`drawRunway: ${runway.direction}, ${runway.primaryName}, ${runway.secondaryName}`);
+    const angleDeg = runway.direction + 90;
+    const a = degToRad(runway.direction + 90);
 
     const x1 = cx + Math.cos(a) * r;
     const y1 = cy + Math.sin(a) * r;
@@ -382,8 +385,8 @@ function drawRunway(ctx, cx, cy, r, angleDeg, primary, secondary) {
     ctx.stroke();
 
     const [p1, p2] = runwayLabelPositions(cx, cy, r, angleDeg);
-    drawRunwayText(ctx, p1.x, p1.y, primary);
-    drawRunwayText(ctx, p2.x, p2.y, secondary);
+    drawRunwayText(ctx, p1.x, p1.y, runway.primaryName);
+    drawRunwayText(ctx, p2.x, p2.y, runway.secondaryName);
 }
 function drawArrow(ctx, x, y, angle, length) {
   ctx.save();
@@ -429,7 +432,7 @@ function doRender(airport, metar) {
     // console.log(`Airport runways: ${JSON.stringify(airport)}`);
     for (const runway of airport.runways) {
         console.log(`Drawing runway at ${runway.direction}`);
-        drawRunway(this.ctx, cx, cy, radius,  runway.direction + 90, runway.primaryName, runway.secondaryName);
+        drawRunway(this.ctx, cx, cy, radius, runway);
         // drawRunway(this.ctx, cx, cy, radius, (runway.direction + 180) % 360);
     }
     // drawRunway(this.ctx, cx, cy, radius, 60 + 90);
