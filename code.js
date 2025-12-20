@@ -6,6 +6,31 @@ let guid = 'df8f1874-245e-44b6-b017-0a69eeb5c231'
 let xmetar_result_uid = 'xmetar_result_uid';
 const prefixes = ['xmetar'];
 
+// Widget elements
+this.host_el = null;
+this.canvas = null;
+this.ctx = null;
+this.metar_line = null;
+this.canvasSize = 450;
+this.canvasHeight = this.canvasSize * 0.85;
+// let canvas = null;
+// let ctx = null;
+// let canvasSize = 450;
+
+this.widgetStore = {
+    active: false
+};
+
+const resizeWidget = () => {
+    if (widget && canvas) {
+        widget.style.width = `${canvasSize}px`;
+        widget.style.height = `${canvasSize}px`;
+        canvas.width = canvasSize;
+        canvas.height = canvasSize;
+    }
+};
+
+
 // Helper conversion functions
 
 function mps2kt(mps) { return mps * 0.868976; }
@@ -14,6 +39,10 @@ function meters2miles(meter) { return meter / 1609.344; }
 function celsius2fahrenheit(celsius) { return celsius * 1.8 + 32; }
 function inhg2hpa(inhg) { return inhg * 33.863889532611; }
 function hpa2inhg(hpa) { return hpa * 0.02952998057228; }
+function parseCloud(code, height) {
+
+    return { 'code': code, 'height': height,  };
+}
 
 function fixWindUnits(unit) {
     if (unit === "MPS") {
@@ -40,17 +69,17 @@ function parse_metar(metar) {
         // Preconditions for missing parts
         if (mode < 3 && metar_parts[i].match(/^(\d+)(?:\/(\d+))?(SM)?$/)) { // /^[0-9]{2}\/[0-9]{2}$/
             mode = 3; // no wind reported
-            console.log('No wind reported');
+            // console.log('No wind reported');
         }
-        if (mode < 5 && metar_parts[i].match(/^(FEW|SCT|BKN|OVC|NCD|NSC)(\d+)?/)) {
+        if (mode < 5 && metar_parts[i].match(/^(FEW|SCT|BKN|OVC)(\d+)?/)) {
             mode = 5; // no visibility or conditions reported
-            console.log('No visibility reported');
+            // console.log('No visibility reported');
         }
         if (mode < 6 && metar_parts[i].match(/(^(M?\d+)\/(M?\d+)$)|(^\/\/\/\/\/)/)) {
             mode = 6; // end of clouds
-            console.log('End of cloud report');
+            // console.log('End of cloud report');
         }
-        console.log(`metar_parts[${i}] = ${metar_parts[i]}, mode = ${mode}`);
+        // console.log(`metar_parts[${i}] = ${metar_parts[i]}, mode = ${mode}`);
         switch (mode) {
             case 0:
                 // ICAO code
@@ -63,10 +92,10 @@ function parse_metar(metar) {
                 if (match) {
                     let now = new Date();
                     metar_data.time = new Date(Date.parse(`${now.getUTCFullYear()}-${now.getUTCMonth()+1}-${match[1]}T${match[2]}:${match[3]}:00Z`));
-                    console.log(`xMETAR: metar_data.time: ${metar_data.time.toUTCString()}`);
+                    // console.log(`xMETAR: metar_data.time: ${metar_data.time.toUTCString()}`);
                     mode = 2;
                 } else {
-                    console.error(`xMETAR: Failed parsing date '${metar_parts[i]}'`);
+                    // console.error(`xMETAR: Failed parsing date '${metar_parts[i]}'`);
                 }
                 break;
             case 2:
@@ -93,7 +122,7 @@ function parse_metar(metar) {
                         console.log(`xMETAR: No wind info found in`);
                     }
                 } else { // is AUTO
-                    console.log(`xMETAR: Auto generated METAR`);
+                    // console.log(`xMETAR: Auto generated METAR`);
                 }
                 break;
             case 3:
@@ -130,7 +159,7 @@ function parse_metar(metar) {
                 // Conditions
                 match = metar_parts[i].match(/^(\+|-|VC|RE)?([A-Z][A-Z])([A-Z][A-Z])?([A-Z][A-Z])?$/);
                 if (match) {
-                    console.log(`Condition match: ${match}`);
+                    // console.log(`Condition match: ${match}`);
                     match
                         .filter((m, index) => {
                             return index !== 0 && m;
@@ -143,7 +172,7 @@ function parse_metar(metar) {
                 break;
             case 5:
                 // Clouds
-                match = metar_parts[i].match(/^(FEW|SCT|BKN|OVC|NCD|NSC)(\d+)?/);
+                match = metar_parts[i].match(/^(FEW|SCT|BKN|OVC)(\d+)?/);
                 if (match) {
                     metar_data.clouds.push({'code': match[1], 'height': match[2] ? Number(match[2]) * 100 : null});
                     // may occur multiple times
@@ -185,6 +214,16 @@ function parse_metar(metar) {
     return metar_data;
 }
 
+// run(() => {
+//     console.log('xMETAR: Widget started');
+//     if (this.widgetStore.active) {
+//         widget.classList.remove('visible');
+//     } else {
+//         widget.classList.add('visible');
+//     }
+//     this.widgetStore.active = false;
+// });
+
 // Main search function for Flow Pro
 search(prefixes, (query, callback) => {
     xmetar_result = {
@@ -193,7 +232,7 @@ search(prefixes, (query, callback) => {
         subtext: 'Enter ICAO code to get METAR information',
         execute: null
     };
-
+    
     // test if any query is given
     if (!query) { 
         callback([xmetar_result]);
@@ -207,6 +246,20 @@ search(prefixes, (query, callback) => {
         return;
     }
 
+    if (data[1] === '-') {
+        xmetar_result = {
+            uid: xmetar_result_uid,
+            label: 'xMETAR - Clear widget',
+            subtext: 'Clears the xMETAR widget display',
+            execute: () => {
+                console.log('Clearing xMETAR widget');
+                this.widgetStore.active = false;
+                callback([xmetar_result]);
+                return true;
+            }
+        };
+    }
+
     let icao = data[1].toUpperCase();
     if (icao == '' || icao.length != 4) {
         xmetar_result.label = 'XMETAR ' + data[1];
@@ -214,18 +267,19 @@ search(prefixes, (query, callback) => {
         callback([xmetar_result]);
         return;
     } 
-
+    
     xmetar_result = {
         uid: xmetar_result_uid,
         label: 'XMETAR ' + data[1],
         subtext: '',
         execute: () => {
+            console.log('Executing XMETAR for ' + icao);
             this.$api.airports.find_airport_by_icao(guid, icao, (airports) => {
                 let lat = airports[0].lat;
                 let lon = airports[0].lon;
 
                 this.$api.weather.find_metar_from_coords(lat, lon, (metar_callback) => {
-                    console.log('METAR: ' + JSON.stringify(metar_callback.metarString));
+                    // console.log('METAR: ' + JSON.stringify(metar_callback));
                     if (airports[0].icao != metar_callback.icao) {
                         xmetar_result.subtext = '<p>No METAR for <i>' + icao + '</i> using <i>' + metar_callback.icao + '</i></p>';
                     }
@@ -235,12 +289,165 @@ search(prefixes, (query, callback) => {
                     metar = parse_metar(metar_callback.metarString);
                     console.log('Parsed METAR: ' + JSON.stringify(metar));
 
+                    const container = document.createElement('div');
+                    container.innerHTML = `${metar.icao}`;
+                    this.host_el.appendChild(container);
+                    // for (cloud of metar.clouds) {
+                    //     xmetar_result.subtext += `<p>Clouds: ${cloud.code} at ${cloud.height ? cloud.height + ' ft' : 'N/A'}</p>`;
+                    // }
+                    this.metar_line.innerHTML = metar_callback.metarString;
+
+                    this.widgetStore.active = true;
+
+                    // console.log(`x: ${JSON.stringify(airports[0].runways[0].direction)}`);
+                    doRender.call(this, airports[0], metar);
+
                     callback([xmetar_result]);
+                    return true;
                 })
             })
-            return false;
+            return true;
         }
     };
     
     callback([xmetar_result]);
+});
+
+style(() => { 
+    if (this.host_el) {
+        if (this.widgetStore.active) {
+            this.host_el.classList.add('visible');
+            // console.log('show');
+        }
+        else {
+            this.host_el.classList.remove('visible');
+            // console.log('hide');
+        }
+    }
+    // if (canvas && (canvas.width !== canvasSize || canvas.height !== canvasSize)) {
+    //     resizeWidget();
+    // }
+    // console.log(`canvasSize: ${this.metar_line.clientHeight}`);
+    // console.log(`canvasSize: ${this.canvas.clientHeight}`);
+    return this.widgetStore.active ? 'active' : null;
+} );
+
+function degToRad(deg) {
+    return deg * (Math.PI / 180);
+}
+function drawCircle(ctx, x, y, radius, color) {
+    ctx.beginPath();
+    ctx.arc(x, y, radius, 0, 2 * Math.PI, false);
+    lineWidth = 2;
+    // ctx.strokeStyle = color;
+    ctx.fillStyle = color;
+    ctx.fill();
+}
+function drawRunway(ctx, cx, cy, r, angleDeg) {
+  const a = degToRad(angleDeg);
+
+  const x1 = cx + Math.cos(a) * r;
+  const y1 = cy + Math.sin(a) * r;
+  const x2 = cx - Math.cos(a) * r;
+  const y2 = cy - Math.sin(a) * r;
+
+  ctx.beginPath();
+  ctx.moveTo(x1, y1);
+  ctx.lineTo(x2, y2);
+  ctx.strokeStyle = "#555";
+  ctx.lineWidth = 20;
+  ctx.stroke();
+}
+function drawArrow(ctx, x, y, angle, length) {
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.rotate(angle);
+
+  ctx.beginPath();
+  ctx.moveTo(0, 0);
+  ctx.lineTo(-length, 0);
+  ctx.lineTo(-length + 10, -6);
+  ctx.moveTo(-length, 0);
+  ctx.lineTo(-length + 10, 6);
+
+  ctx.strokeStyle = "red";
+  ctx.lineWidth = 2;
+  ctx.stroke();
+  ctx.restore();
+}
+function drawWind(ctx, cx, cy, r, windDeg) {
+  const a = degToRad(windDeg);
+
+  // Position on circle border
+  const x = cx + Math.cos(a) * r;
+  const y = cy + Math.sin(a) * r;
+
+  // Arrow points inward
+  drawArrow(ctx, x, y, a + Math.PI, 25);
+}
+function doRender(airport, metar) {
+    if (!this.ctx) {
+        console.log('xMETAR: No canvas context for rendering');
+        return;
+    }
+
+    // Clear canvas
+    this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
+    
+    const radius = 120;
+    const cx = radius + 10;
+    const cy = radius + 10;
+    
+    drawCircle(this.ctx, cx, cy, radius, '#004000');
+    // console.log(`Airport runways: ${JSON.stringify(airport)}`);
+    for (const runway of airport.runways) {
+        console.log(`Drawing runway at ${runway.direction}`);
+        // drawRunway(this.ctx, cx, cy, radius,  degToRad(runway.direction));
+        // drawRunway(this.ctx, cx, cy, radius, (runway.direction + 180) % 360);
+    }
+    drawRunway(this.ctx, cx, cy, radius, 45);
+    // drawRunway(this.ctx, cx, cy, radius, 90);
+    drawWind(this.ctx, cx, cy, radius, degToRad(60));
+}
+
+html_created(el => {
+    this.host_el = el.querySelector('#Ape42_xmetar');
+    this.canvas = el.querySelector('#Ape42_xmetar_canvas');
+    // console.log(`canvas: ${this.canvas}`)
+    this.metar_line = el.querySelector('#Ape42_xmetar_container');
+
+    // console.log('xMETAR: HTML created');
+    // widget = el.querySelector('#Ape42-xmetar');
+    // canvas = el.querySelector('#Ape42-xmetar-canvas');
+    // console.log(widget);
+    // console.log(canvas);
+    // if (widget) {
+    //     console.log('xMETAR: Widget found');
+    //     if (widgetStore.active) {
+    //         widget.classList.add('visible');
+    //     } else {
+    //         widget.classList.remove('visible');
+    //     }
+    // }
+    if (!this.canvas) {
+        console.log('xMETAR: Canvas not found');
+        return;
+    }
+    this.ctx = this.canvas.getContext('2d');
+    if (!ctx) {
+        console.log('xMETAR: Canvas context not found');
+        return;
+    }
+
+
+
+
+    // todo: Move to function "doRender 
+    // this.ctx.beginPath();
+    // this.ctx.moveTo(0, 0);
+    // this.ctx.lineTo(this.canvasSize, this.canvasSize * 0.85);
+    // this.ctx.lineWidth = 5;
+    // this.ctx.strokeStyle = '#FF0000';
+    // this.ctx.stroke();
+
 });
