@@ -4,7 +4,7 @@
 let xmetar_result = null;
 let guid = 'df8f1874-245e-44b6-b017-0a69eeb5c231'
 let xmetar_result_uid = 'xmetar_result_uid';
-const prefixes = ['xmetar'];
+const prefixes = ['xmetar', 'xm'];
 
 // Widget elements
 this.host_el = null;
@@ -103,15 +103,15 @@ function parse_metar(metar) {
                     match = metar_parts[i].match(/^(\d\d\d|VRB)P?(\d+)(?:G(\d+))?(KT|MPS|KMH)/);
                     if (match) {
                         metar_data.wind = {};
-                        metar_data.wind.degrees = match[1] === "VRB" ? "VRB" : match[1];
+                        metar_data.wind.degrees = match[1] === "VRB" ? "VRB" : Number(match[1]);
                         metar_data.wind.speed = Number(match[2]);
                         metar_data.wind.gusts = (match[3] && match[3].length > 0 ? Number(match[3]) : null);
 
                         if (metar_parts[i+1] != "CAVOK" && metar_parts[i+1].indexOf("V", 0) >= 0) {
                             var match2 = metar_parts[i+1].match(/^(\d\d\d)V(\d\d\d)/);
-                            metar_data.wind.degrees = {};
-                            metar_data.wind.degrees.from = Number(match2[1]);
-                            metar_data.wind.degrees.to = Number(match2[2]);
+                            // metar_data.wind.degrees = {};
+                            metar_data.wind.from = Number(match2[1]);
+                            metar_data.wind.to = Number(match2[2]);
                             i += 1;
                         }
                         // fixWindUnits(match[4]); // TODO: implement unit conversion if needed, but in which case?
@@ -213,16 +213,18 @@ function parse_metar(metar) {
     return metar_data;
 }
 
-// run(() => {
-//     console.log('xMETAR: Widget run()');
-//     if (this.widgetStore.active) {
-//         this.host_el.classList.remove('visible');
-//         this.widgetStore.active = false;
-//     } else {
-//         this.host_el.classList.add('visible');
-//         this.widgetStore.active = true;
-//     }
-// });
+// Widget toggle function
+// Hides and shows the widget on each run() call
+run(() => {
+    console.log('xMETAR: Widget run()');
+    if (this.widgetStore.active) {
+        this.host_el.classList.remove('visible');
+        this.widgetStore.active = false;
+    } else {
+        this.host_el.classList.add('visible');
+        this.widgetStore.active = true;
+    }
+});
 
 // Main search function for Flow Pro
 search(prefixes, (query, callback) => {
@@ -280,6 +282,10 @@ search(prefixes, (query, callback) => {
 
                 this.$api.weather.find_metar_from_coords(lat, lon, (metar_callback) => {
                     // console.log('METAR: ' + JSON.stringify(metar_callback));
+                    // metar_callback.metarString = "EDDB 211420Z AUTO 10010KT 9000 OVC006 BKN016 SCT026 FEW050 07/06 Q1018 NOSIG";
+                    // metar_callback.metarString = "EDDB 211420Z AUTO 10010KT 060V140 9000 OVC006 BKN016 SCT026 FEW050 07/06 Q1018 NOSIG";
+                    // metar_callback.metarString = "EDDB 211420Z AUTO VRB01KT 9000 OVC006 BKN016 SCT026 FEW050 07/06 Q1018 NOSIG";
+                    // metar_callback.metarString = "EDDB 211420Z AUTO 10010KT 9000 CAVOK 07/06 Q1018 NOSIG";
                     if (airports[0].icao != metar_callback.icao) {
                         xmetar_result.subtext = '<p>No METAR for <i>' + icao + '</i> using <i>' + metar_callback.icao + '</i></p>';
                     }
@@ -287,7 +293,7 @@ search(prefixes, (query, callback) => {
                     xmetar_result.is_note = true;
 
                     metar = parse_metar(metar_callback.metarString);
-                    // console.log('Parsed METAR: ' + JSON.stringify(metar));
+                    console.log('Parsed METAR: ' + JSON.stringify(metar));
 
                     const container = document.createElement('div');
                     container.innerHTML = `${metar.icao}`;
@@ -325,13 +331,89 @@ style(() => {
             // console.log('hide');
         }
     }
-    // if (canvas && (canvas.width !== canvasSize || canvas.height !== canvasSize)) {
-    //     resizeWidget();
-    // }
-    // console.log(`canvasSize: ${this.metar_line.clientHeight}`);
-    // console.log(`canvasSize: ${this.canvas.clientHeight}`);
     return this.widgetStore.active ? 'active' : null;
 })
+
+// Drawing functions
+const cloudCounts = {
+  FEW: 2,
+  SCT: 4,
+  BKN: 7,
+  OVC: 10,
+};
+
+
+function drawCloudLayer(ctx, x, yBottom, width, rowH, layer) {
+    const count = cloudCounts[layer.code] || 3;
+    const radius = 10; 
+
+    // Convert altitude to pixel Y
+    const baseFt = Math.min(layer.height, 5000);
+    const yBase = yBottom - (baseFt / 5000) * (rowH * 5);
+
+    const spacing = width / count;
+
+    ctx.save();
+    ctx.fillStyle = "rgba(255,255,255,0.6)";
+
+    for (let i = 0; i < count; i++) {
+        const cx = x + spacing * i + spacing / 2;
+        const cy = yBase - radius; // bottom touches cloud base
+
+        ctx.beginPath();
+        ctx.arc(cx, cy, radius, 0, Math.PI * 2);
+        ctx.fill();
+    }
+    ctx.fillStyle = "#fff";
+    ctx.font = "bold 12px sans-serif";
+    ctx.textAlign = "left";
+    ctx.textBaseline = "middle";
+    ctx.fillText(layer.code, x + width + 6, yBase - radius);
+
+    ctx.restore();
+}
+
+
+function drawCloudDiagram(ctx, x, yBottom, width, height, clouds) {
+  const maxFt = 5000;
+  const stepFt = 1000;
+  const rows = maxFt / stepFt;
+  const rowH = height / rows;
+
+  ctx.save();
+
+  // Grid + labels
+  ctx.strokeStyle = "#ccc";
+  ctx.lineWidth = 1;
+  ctx.font = "11px sans-serif";
+  ctx.fillStyle = "#000";
+
+  for (let i = 0; i <= rows; i++) {
+    const y = yBottom - i * rowH;
+    ctx.beginPath();
+    ctx.moveTo(x, y);
+    ctx.lineTo(x + width, y);
+    ctx.stroke();
+
+    ctx.fillText(`${i * stepFt}`, x - 30, y + 4);
+  }
+
+  // Draw clouds
+  if (!clouds || clouds.length === 0) {
+    ctx.fillStyle = "#fff";
+    ctx.font = "bold 14px sans-serif";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText("CAVOK / NSC", x + width / 2, yBottom - height / 2);
+  } else {
+    clouds.filter(layer => layer.height <= 5000).forEach(layer => {
+        drawCloudLayer(ctx, x, yBottom, width, rowH, layer);
+    });
+  }
+
+  ctx.restore();
+}
+
 
 function degToRad(deg) {
     return (deg - 90) * (Math.PI / 180);
@@ -473,10 +555,31 @@ function drawArrow(ctx, x, y, angle, length) {
   ctx.restore();
 }
 
-function drawWind(ctx, cx, cy, r, windDeg, length = 40) {
-  const a = degToRad(windDeg);
+function drawWind(ctx, cx, cy, r, wind, length = 40) {
+    if (wind.degrees === "VRB") {
+        ctx.save();
+        ctx.font = "bold 18px sans-serif";
+        ctx.fillStyle = "red";
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        ctx.fillText("VRB", cx, cy);
+        ctx.restore();
+        return;
+    }
+    const a = degToRad(wind.degrees);
 
-  drawArrow(ctx, cx, cy, a, length);
+    if (wind.from && wind.to) {
+        const startRad = degToRad(wind.from + 180);
+        const endRad = degToRad(wind.to + 180);
+        ctx.beginPath();
+        ctx.moveTo(cx, cy);
+        ctx.arc(cx, cy, length + 5, startRad, endRad);
+        ctx.closePath();
+        ctx.fillStyle = "rgba(255,90,90,0.25)";
+        ctx.fill();
+        console.log(`Drawing wind variation arc from ${wind.from} to ${wind.to}`);
+    }
+    drawArrow(ctx, cx, cy, degToRad(wind.degrees), length);
 }
 
 function doRender(airport, metar) {
@@ -493,16 +596,19 @@ function doRender(airport, metar) {
     const cy = radius + 10;
     
     drawCircle(this.ctx, cx, cy, radius, '#004000');
-    drawCompassRose(this.ctx, cx, cy, radius);
     // console.log(`Airport runways: ${JSON.stringify(airport)}`);
     for (const runway of airport.runways) {
         // console.log(`Drawing runway at ${runway.direction}`);
-        drawRunway(this.ctx, cx, cy, radius - 20, runway, runway.primaryName.replace(/[0-9]/g, ''));
+        drawRunway(this.ctx, cx, cy, radius - 25, runway, runway.primaryName.replace(/[0-9]/g, ''));
         // drawRunway(this.ctx, cx, cy, radius, (runway.direction + 180) % 360);
     }
     // drawRunway(this.ctx, cx, cy, radius, 60 + 90);
     // drawRunway(this.ctx, cx, cy, radius, 90);
-    drawWind(this.ctx, cx, cy, radius, metar.wind.degrees);
+    drawWind(this.ctx, cx, cy, radius, metar.wind, 50);
+    
+    drawCompassRose(this.ctx, cx, cy, radius);
+
+    drawCloudDiagram(this.ctx, 290, 180, 170, 150, metar.clouds);
 }
 
 html_created(el => {
