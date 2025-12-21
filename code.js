@@ -20,13 +20,49 @@ this.ctx = null;
 this.metar_line = null;
 this.canvasSize = 450;
 this.canvasHeight = this.canvasSize * 0.85;
-// let canvas = null;
-// let ctx = null;
-// let canvasSize = 450;
 
+// Persistent storage for widget settings
 this.widgetStore = {
-    active: false
+    active: false,
+    copyMetarToClipboard: true,
+    keepOpen: true,
+    showWidgetAfterMetarFetch: true,
 };
+this.$api.datastore.import(this.widgetStore);
+
+// Settings definition
+settings_define({
+    copyMetarToClipboard: {
+        label: 'Copy METAR',
+        type: 'checkbox',
+        description: 'If enabled, the METAR string will be copied to clipboard when the widget is executed.',
+        value: this.widgetStore.copyMetarToClipboard,
+        changed: (value) => {
+            this.widgetStore.copyMetarToClipboard = value;
+            this.$api.datastore.export(this.widgetStore);
+        }
+    },
+    keepOpen: {
+        label: 'Keep Otto',
+        type: 'checkbox',
+        description: 'If enabled, the search bar remain open after executing a search, displaying the METAR information.',
+        value: this.widgetStore.keepOpen,
+        changed: (value) => {
+            this.widgetStore.keepOpen = value;
+            this.$api.datastore.export(this.widgetStore);
+        }
+    },
+    showWidgetAfterMetarFetch: {
+        label: 'Show widget',
+        type: 'checkbox',
+        description: 'If enabled, the widget will be shown automatically after fetching METAR data.',
+        value: this.widgetStore.showWidgetAfterMetarFetch,
+        changed: (value) => {
+            this.widgetStore.showWidgetAfterMetarFetch = value;
+            this.$api.datastore.export(this.widgetStore);
+        }
+    }
+});
 
 // const resizeWidget = () => {
 //     if (this.host_el && this.canvas) {
@@ -234,38 +270,43 @@ run(() => {
 
 // Main search function for Flow Pro
 search(prefixes, (query, callback) => {
-    xmetar_result = {
+    let xmetar_result = {
         uid: xmetar_result_uid,
         label: 'XMETAR &lt;ICAO&gt;',
         subtext: 'Enter ICAO code to get METAR information',
         execute: null
     };
+    let xmetar_result_show_hide = {
+        uid: xmetar_result_uid + "_show_hide",
+        label: 'xMETAR +|-|*',
+        subtext: 'Shows, hides or toggles the xMETAR widget',
+        execute: null
+    }
     
     // test if any query is given
     if (!query) { 
-        callback([xmetar_result]);
         return; 
     }
     
     // test if query has sufficient parameters
     let data = query.toLowerCase().split(' ');
     if (data.length == 1 || !data[1] ) {
-        callback([xmetar_result]);
+        callback([xmetar_result, xmetar_result_show_hide]);
         return;
     }
     
-    if (data[1] === '-') {
-        xmetar_result = {
-            uid: xmetar_result_uid,
-            label: 'xMETAR - Clear widget',
-            subtext: 'Clears the xMETAR widget display',
-            execute: () => {
-                console.log('Clearing xMETAR widget');
+    if (['-', '+', '*'].indexOf(data[1]) > -1) {
+        xmetar_result_show_hide.execute = () => {
+            if (data[1] === '*') {
+                this.widgetStore.active = !this.widgetStore.active;
+            } else if (data[1] === '-') {
                 this.widgetStore.active = false;
-                callback([xmetar_result]);
-                return true;
+            } else if (data[1] === '+') {
+                this.widgetStore.active = true;
             }
-        };
+        }
+        callback([xmetar_result_show_hide]);
+        return true;
     }
     
     let icao = data[1].toUpperCase();
@@ -297,22 +338,28 @@ search(prefixes, (query, callback) => {
                     }
                     xmetar_result.subtext += '<p>' + metar_callback.metarString + '</p>';
                     xmetar_result.is_note = true;
-                    this.$api.command.copy_text(metar_callback.metarString);
+                    if (this.widgetStore.copyMetarToClipboard) {
+                        this.$api.command.copy_text(metar_callback.metarString);
+                    }
 
                     metar = parse_metar(metar_callback.metarString);
                     console.log('Parsed METAR: ' + JSON.stringify(metar));
 
-                    // const container = document.createElement('div');
-                    // container.innerHTML = `${metar.icao}`;
-                    // this.host_el.appendChild(container);
                     this.metar_line.innerHTML = metar_callback.metarString;
+                    
+                    try {
+                        if (this.widgetStore.showWidgetAfterMetarFetch) {
+                            this.widgetStore.active = true; // show widget
+                        }
+                        doRender.call(this, airports[0], metar);
+                    } catch (e) {
+                        console.error('xMETAR: Error during rendering: ' + e);
+                    }
 
-                    this.widgetStore.active = true;
-
-                    // console.log(`x: ${JSON.stringify(airports[0].runways[0].direction)}`);
-                    doRender.call(this, airports[0], metar);
-
-                    callback([xmetar_result]);
+                    if (this.widgetStore.keepOpen) {
+                        console.log('xMETAR: Keeping widget open after search');
+                        callback([xmetar_result]);
+                    }
                     return true;
                 })
             })
