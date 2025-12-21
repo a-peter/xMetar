@@ -373,7 +373,6 @@ function drawCloudLayer(ctx, x, yBottom, width, rowH, layer) {
     ctx.restore();
 }
 
-
 function drawCloudDiagram(ctx, x, yBottom, width, height, clouds) {
   const maxFt = 5000;
   const stepFt = 1000;
@@ -413,7 +412,6 @@ function drawCloudDiagram(ctx, x, yBottom, width, height, clouds) {
 
   ctx.restore();
 }
-
 
 function degToRad(deg) {
     return (deg - 90) * (Math.PI / 180);
@@ -494,7 +492,7 @@ function drawRunwayText(ctx, x, y, text) {
   ctx.fillStyle = "#FFF";
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
-  ctx.fillText(text, x, y);
+  ctx.fillText(text.padStart(2, '0'), x, y);
   ctx.restore();
 }
 
