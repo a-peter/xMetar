@@ -334,8 +334,13 @@ style(() => {
 })
 
 function degToRad(deg) {
+    return (deg - 90) * (Math.PI / 180);
+}
+
+function degToCanvasRad(deg) {
     return deg * (Math.PI / 180);
 }
+
 function drawCircle(ctx, x, y, radius, color) {
     ctx.beginPath();
     ctx.arc(x, y, radius, 0, 2 * Math.PI, false);
@@ -344,15 +349,73 @@ function drawCircle(ctx, x, y, radius, color) {
     ctx.fillStyle = color;
     ctx.fill();
 }
+
+function drawCompassLabel(ctx, cx, cy, r, deg) {
+  const labels = {
+    270: "N",
+    0: "E",
+    90: "S",
+    180: "W"
+  };
+
+  const a = degToCanvasRad(deg);
+  const inset = 18;
+
+  ctx.save();
+  ctx.font = "bold 12px sans-serif";
+  ctx.fillStyle = "#FFF";
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+
+  ctx.fillText(
+    labels[deg],
+    cx + Math.cos(a) * (r - inset),
+    cy + Math.sin(a) * (r - inset)
+  );
+
+  ctx.restore();
+}
+
+function drawCompassRose(ctx, cx, cy, r) {
+  ctx.save();
+
+  for (let deg = 0; deg < 360; deg += 10) {
+    const a = degToCanvasRad(deg);
+
+    const isMajor = deg % 30 === 0;
+    const tickLen = isMajor ? 10 : 5;
+
+    const x1 = cx + Math.cos(a) * r;
+    const y1 = cy + Math.sin(a) * r;
+    const x2 = cx + Math.cos(a) * (r - tickLen);
+    const y2 = cy + Math.sin(a) * (r - tickLen);
+
+    ctx.beginPath();
+    ctx.moveTo(x1, y1);
+    ctx.lineTo(x2, y2);
+    ctx.lineWidth = isMajor ? 2 : 1;
+    ctx.strokeStyle = "#FFF";
+    ctx.stroke();
+
+    // Cardinal labels
+    if (deg % 90 === 0) {
+      drawCompassLabel(ctx, cx, cy, r, deg);
+    }
+  }
+
+  ctx.restore();
+}
+
 function drawRunwayText(ctx, x, y, text) {
   ctx.save();
   ctx.font = "bold 14px sans-serif";
-  ctx.fillStyle = "#000";
+  ctx.fillStyle = "#FFF";
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
   ctx.fillText(text, x, y);
   ctx.restore();
 }
+
 function runwayLabelPositions(cx, cy, r, angleDeg) {
   const d = r * 0.88;
   const angleRad = degToRad(angleDeg);
@@ -367,10 +430,11 @@ function runwayLabelPositions(cx, cy, r, angleDeg) {
     }
   ];
 }
+
 function drawRunway (ctx, cx, cy, r, runway) {
     // runway.direction + 90, runway.primaryName, runway.secondaryName
-    const angleDeg = runway.direction + 90;
-    const a = degToRad(runway.direction + 90);
+    const angleDeg = runway.direction; // + 90;
+    const a = degToRad(runway.direction); // + 90);
 
     const x1 = cx + Math.cos(a) * r;
     const y1 = cy + Math.sin(a) * r;
@@ -387,9 +451,10 @@ function drawRunway (ctx, cx, cy, r, runway) {
     // Draw runway designators without letters.
     const [p1, p2] = runwayLabelPositions(cx, cy, r, angleDeg);
     const designators = runway.designation.split('-');
-    drawRunwayText(ctx, p1.x, p1.y, designators[0]);
-    drawRunwayText(ctx, p2.x, p2.y, designators[1]);
+    drawRunwayText(ctx, p1.x, p1.y, designators[1]);
+    drawRunwayText(ctx, p2.x, p2.y, designators[0]);
 }
+
 function drawArrow(ctx, x, y, angle, length) {
   ctx.save();
   ctx.translate(x, y);
@@ -407,11 +472,13 @@ function drawArrow(ctx, x, y, angle, length) {
   ctx.stroke();
   ctx.restore();
 }
+
 function drawWind(ctx, cx, cy, r, windDeg, length = 40) {
   const a = degToRad(windDeg);
 
   drawArrow(ctx, cx, cy, a, length);
 }
+
 function doRender(airport, metar) {
     if (!this.ctx) {
         console.log('xMETAR: No canvas context for rendering');
@@ -426,15 +493,16 @@ function doRender(airport, metar) {
     const cy = radius + 10;
     
     drawCircle(this.ctx, cx, cy, radius, '#004000');
+    drawCompassRose(this.ctx, cx, cy, radius);
     // console.log(`Airport runways: ${JSON.stringify(airport)}`);
     for (const runway of airport.runways) {
         // console.log(`Drawing runway at ${runway.direction}`);
-        drawRunway(this.ctx, cx, cy, radius, runway, runway.primaryName.replace(/[0-9]/g, ''));
+        drawRunway(this.ctx, cx, cy, radius - 20, runway, runway.primaryName.replace(/[0-9]/g, ''));
         // drawRunway(this.ctx, cx, cy, radius, (runway.direction + 180) % 360);
     }
     // drawRunway(this.ctx, cx, cy, radius, 60 + 90);
     // drawRunway(this.ctx, cx, cy, radius, 90);
-    drawWind(this.ctx, cx, cy, radius, metar.wind.degrees + 90);
+    drawWind(this.ctx, cx, cy, radius, metar.wind.degrees);
 }
 
 html_created(el => {
