@@ -1,1 +1,27 @@
- 
+#Ape42_xmetar {
+    display: none;
+    position: absolute;
+    background-color: rgba(128, 128, 128, 0.15);
+    overflow: hidden;
+    pointer-events: all;
+}
+
+#Ape42_xmetar.visible {
+    display: flex;
+    flex-direction: column;
+}
+
+#Ape42_xmetar_container {
+    color: white;
+    background-color: rgba(64, 64, 64, 0.5);
+    font-family: monospace;
+    font-size: 14px;
+    padding: 5px;
+    text-align: left;
+    border: 1px solid black;
+    height: 15%;
+}
+
+#Ape42_xmetar_canvas {
+    /* border: 2px solid white; */
+}
