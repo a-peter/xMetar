@@ -283,9 +283,9 @@ search(prefixes, (query, callback) => {
                 this.$api.weather.find_metar_from_coords(lat, lon, (metar_callback) => {
                     // console.log('METAR: ' + JSON.stringify(metar_callback));
                     // metar_callback.metarString = "EDDB 211420Z AUTO 10010KT 9000 OVC006 BKN016 SCT026 FEW050 07/06 Q1018 NOSIG";
-                    // metar_callback.metarString = "EDDB 211420Z AUTO 10010KT 060V140 9000 OVC006 BKN016 SCT026 FEW050 07/06 Q1018 NOSIG";
+                    metar_callback.metarString = "EDDB 211420Z AUTO 10001KT 060V140 9000 OVC006 BKN016 SCT026 FEW050 07/06 Q1018 NOSIG";
                     // metar_callback.metarString = "EDDB 211420Z AUTO VRB01KT 9000 OVC006 BKN016 SCT026 FEW050 07/06 Q1018 NOSIG";
-                    // metar_callback.metarString = "EDDB 211420Z AUTO 10010KT 9000 CAVOK 07/06 Q1018 NOSIG";
+                    // metar_callback.metarString = "EDDB 211420Z AUTO 10021KT 9000 CAVOK 07/06 Q1018 NOSIG";
                     if (airports[0].icao != metar_callback.icao) {
                         xmetar_result.subtext = '<p>No METAR for <i>' + icao + '</i> using <i>' + metar_callback.icao + '</i></p>';
                     }
@@ -537,7 +537,7 @@ function drawRunway (ctx, cx, cy, r, runway) {
     drawRunwayText(ctx, p2.x, p2.y, designators[0]);
 }
 
-function drawArrow(ctx, x, y, angle, length) {
+function drawArrow(ctx, x, y, angle, length, color = "red") {
   ctx.save();
   ctx.translate(x, y);
   ctx.rotate(angle);
@@ -549,17 +549,21 @@ function drawArrow(ctx, x, y, angle, length) {
   ctx.moveTo(-length, 0);
   ctx.lineTo(-length + 10, 6);
 
-  ctx.strokeStyle = "red";
+  ctx.strokeStyle = color;
   ctx.lineWidth = 2;
   ctx.stroke();
   ctx.restore();
 }
 
 function drawWind(ctx, cx, cy, r, wind, length = 40) {
+    let color = "red", fillColor = "rgba(255,90,90,0.25)";
+    if (wind.speed <= 10) { color = "lime"; fillColor = "rgba(90,255,90,0.15)"; }
+    if (wind.speed > 10 && wind.speed <= 20) { color = "yellow"; fillColor = "rgba(255,255,90,0.25)"; }
+    if (wind.speed > 20 && wind.speed <= 30) { color = "darkOrange"; fillColor = "rgba(255,165,0,0.25)"; }
     if (wind.degrees === "VRB") {
         ctx.save();
         ctx.font = "bold 18px sans-serif";
-        ctx.fillStyle = "red";
+        ctx.fillStyle = color;
         ctx.textAlign = "center";
         ctx.textBaseline = "middle";
         ctx.fillText("VRB", cx, cy);
@@ -575,11 +579,11 @@ function drawWind(ctx, cx, cy, r, wind, length = 40) {
         ctx.moveTo(cx, cy);
         ctx.arc(cx, cy, length + 5, startRad, endRad);
         ctx.closePath();
-        ctx.fillStyle = "rgba(255,90,90,0.25)";
+        ctx.fillStyle = fillColor;
         ctx.fill();
         console.log(`Drawing wind variation arc from ${wind.from} to ${wind.to}`);
     }
-    drawArrow(ctx, cx, cy, degToRad(wind.degrees), length);
+    drawArrow(ctx, cx, cy, degToRad(wind.degrees), length, color);
 }
 
 function doRender(airport, metar) {
