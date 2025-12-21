@@ -21,14 +21,14 @@ this.widgetStore = {
     active: false
 };
 
-const resizeWidget = () => {
-    if (widget && canvas) {
-        widget.style.width = `${canvasSize}px`;
-        widget.style.height = `${canvasSize}px`;
-        canvas.width = canvasSize;
-        canvas.height = canvasSize;
-    }
-};
+// const resizeWidget = () => {
+//     if (this.host_el && this.canvas) {
+//         widget.style.width = `${canvasSize}px`;
+//         widget.style.height = `${canvasSize}px`;
+//         canvas.width = canvasSize;
+//         canvas.height = canvasSize;
+//     }
+// };
 
 
 // Helper conversion functions
@@ -40,7 +40,6 @@ function celsius2fahrenheit(celsius) { return celsius * 1.8 + 32; }
 function inhg2hpa(inhg) { return inhg * 33.863889532611; }
 function hpa2inhg(hpa) { return hpa * 0.02952998057228; }
 function parseCloud(code, height) {
-
     return { 'code': code, 'height': height,  };
 }
 
@@ -215,13 +214,14 @@ function parse_metar(metar) {
 }
 
 // run(() => {
-//     console.log('xMETAR: Widget started');
+//     console.log('xMETAR: Widget run()');
 //     if (this.widgetStore.active) {
-//         widget.classList.remove('visible');
+//         this.host_el.classList.remove('visible');
+//         this.widgetStore.active = false;
 //     } else {
-//         widget.classList.add('visible');
+//         this.host_el.classList.add('visible');
+//         this.widgetStore.active = true;
 //     }
-//     this.widgetStore.active = false;
 // });
 
 // Main search function for Flow Pro
@@ -245,7 +245,7 @@ search(prefixes, (query, callback) => {
         callback([xmetar_result]);
         return;
     }
-
+    
     if (data[1] === '-') {
         xmetar_result = {
             uid: xmetar_result_uid,
@@ -259,7 +259,7 @@ search(prefixes, (query, callback) => {
             }
         };
     }
-
+    
     let icao = data[1].toUpperCase();
     if (icao == '' || icao.length != 4) {
         xmetar_result.label = 'XMETAR ' + data[1];
@@ -311,6 +311,7 @@ search(prefixes, (query, callback) => {
     };
     
     callback([xmetar_result]);
+    return true;
 });
 
 style(() => { 
@@ -330,7 +331,7 @@ style(() => {
     // console.log(`canvasSize: ${this.metar_line.clientHeight}`);
     // console.log(`canvasSize: ${this.canvas.clientHeight}`);
     return this.widgetStore.active ? 'active' : null;
-} );
+})
 
 function degToRad(deg) {
     return deg * (Math.PI / 180);
@@ -366,9 +367,8 @@ function runwayLabelPositions(cx, cy, r, angleDeg) {
     }
   ];
 }
-function drawRunway(ctx, cx, cy, r, runway) {
+function drawRunway (ctx, cx, cy, r, runway) {
     // runway.direction + 90, runway.primaryName, runway.secondaryName
-    console.log(`drawRunway: ${runway.direction}, ${runway.primaryName}, ${runway.secondaryName}`);
     const angleDeg = runway.direction + 90;
     const a = degToRad(runway.direction + 90);
 
@@ -384,9 +384,11 @@ function drawRunway(ctx, cx, cy, r, runway) {
     ctx.lineWidth = 10;
     ctx.stroke();
 
+    // Draw runway designators without letters.
     const [p1, p2] = runwayLabelPositions(cx, cy, r, angleDeg);
-    drawRunwayText(ctx, p1.x, p1.y, runway.primaryName);
-    drawRunwayText(ctx, p2.x, p2.y, runway.secondaryName);
+    const designators = runway.designation.split('-');
+    drawRunwayText(ctx, p1.x, p1.y, designators[0]);
+    drawRunwayText(ctx, p2.x, p2.y, designators[1]);
 }
 function drawArrow(ctx, x, y, angle, length) {
   ctx.save();
@@ -405,15 +407,10 @@ function drawArrow(ctx, x, y, angle, length) {
   ctx.stroke();
   ctx.restore();
 }
-function drawWind(ctx, cx, cy, r, windDeg) {
+function drawWind(ctx, cx, cy, r, windDeg, length = 40) {
   const a = degToRad(windDeg);
 
-  // Position on circle border
-  const x = cx + Math.cos(a) * r;
-  const y = cy + Math.sin(a) * r;
-
-  // Arrow points inward
-  drawArrow(ctx, x, y, a + Math.PI, 25);
+  drawArrow(ctx, cx, cy, a, length);
 }
 function doRender(airport, metar) {
     if (!this.ctx) {
@@ -431,13 +428,13 @@ function doRender(airport, metar) {
     drawCircle(this.ctx, cx, cy, radius, '#004000');
     // console.log(`Airport runways: ${JSON.stringify(airport)}`);
     for (const runway of airport.runways) {
-        console.log(`Drawing runway at ${runway.direction}`);
-        drawRunway(this.ctx, cx, cy, radius, runway);
+        // console.log(`Drawing runway at ${runway.direction}`);
+        drawRunway(this.ctx, cx, cy, radius, runway, runway.primaryName.replace(/[0-9]/g, ''));
         // drawRunway(this.ctx, cx, cy, radius, (runway.direction + 180) % 360);
     }
     // drawRunway(this.ctx, cx, cy, radius, 60 + 90);
     // drawRunway(this.ctx, cx, cy, radius, 90);
-    drawWind(this.ctx, cx, cy, radius, degToRad(60));
+    drawWind(this.ctx, cx, cy, radius, metar.wind.degrees + 90);
 }
 
 html_created(el => {
@@ -446,38 +443,14 @@ html_created(el => {
     // console.log(`canvas: ${this.canvas}`)
     this.metar_line = el.querySelector('#Ape42_xmetar_container');
 
-    // console.log('xMETAR: HTML created');
-    // widget = el.querySelector('#Ape42-xmetar');
-    // canvas = el.querySelector('#Ape42-xmetar-canvas');
-    // console.log(widget);
-    // console.log(canvas);
-    // if (widget) {
-    //     console.log('xMETAR: Widget found');
-    //     if (widgetStore.active) {
-    //         widget.classList.add('visible');
-    //     } else {
-    //         widget.classList.remove('visible');
-    //     }
-    // }
     if (!this.canvas) {
         console.log('xMETAR: Canvas not found');
         return;
     }
     this.ctx = this.canvas.getContext('2d');
-    if (!ctx) {
+    if (!this.ctx) {
         console.log('xMETAR: Canvas context not found');
         return;
     }
-
-
-
-
-    // todo: Move to function "doRender 
-    // this.ctx.beginPath();
-    // this.ctx.moveTo(0, 0);
-    // this.ctx.lineTo(this.canvasSize, this.canvasSize * 0.85);
-    // this.ctx.lineWidth = 5;
-    // this.ctx.strokeStyle = '#FF0000';
-    // this.ctx.stroke();
-
+    console.log('xMETAR: Canvas context initialized');
 });
