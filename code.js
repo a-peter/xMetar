@@ -538,21 +538,39 @@ function drawRunway (ctx, cx, cy, r, runway) {
 }
 
 function drawArrow(ctx, x, y, angle, length, color = "red") {
-  ctx.save();
-  ctx.translate(x, y);
-  ctx.rotate(angle);
+    ctx.save();
+    ctx.translate(x, y);
+    ctx.rotate(angle);
 
-  ctx.beginPath();
-  ctx.moveTo(0, 0);
-  ctx.lineTo(-length, 0);
-  ctx.lineTo(-length + 10, -6);
-  ctx.moveTo(-length, 0);
-  ctx.lineTo(-length + 10, 6);
+    ctx.beginPath();
+    ctx.moveTo(0, 0);
+    ctx.lineTo(-length, 0);
+    ctx.lineTo(-length + 10, -6);
+    ctx.moveTo(-length, 0);
+    ctx.lineTo(-length + 10, 6);
 
-  ctx.strokeStyle = color;
-  ctx.lineWidth = 2;
-  ctx.stroke();
-  ctx.restore();
+    ctx.strokeStyle = color;
+    ctx.lineWidth = 2;
+    ctx.stroke();
+    ctx.restore();
+}
+
+function drawWindSpeed(ctx, cx, cy, angleRad, arrowLength, speed, color = "red") {
+    if (speed == null) return;
+
+    const offset = 12; // distance beyond arrow tip
+
+    const tx = cx + Math.cos(angleRad) * (arrowLength + offset);
+    const ty = cy + Math.sin(angleRad) * (arrowLength + offset);
+
+    ctx.save();
+    ctx.font = "bold 13px sans-serif";
+    ctx.fillStyle = color;
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+
+    ctx.fillText(`${speed}`, tx, ty);
+    ctx.restore();
 }
 
 function drawWind(ctx, cx, cy, r, wind, length = 40) {
@@ -584,6 +602,7 @@ function drawWind(ctx, cx, cy, r, wind, length = 40) {
         console.log(`Drawing wind variation arc from ${wind.from} to ${wind.to}`);
     }
     drawArrow(ctx, cx, cy, degToRad(wind.degrees), length, color);
+    drawWindSpeed(ctx, cx, cy, degToRad(wind.degrees + 180), length, wind.speed + "kt", color);
 }
 
 function doRender(airport, metar) {
