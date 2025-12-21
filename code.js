@@ -1,5 +1,12 @@
 // Version 0.3
 // Author: Ape42
+// Description: xMETAR widget for Flow Pro - displays METAR information for a given ICAO code including wind and cloud diagram.
+// Usage: Type "xmetar &lt;ICAO&gt;" in Flow Pro search to get METAR information for the given ICAO code.
+//        Type "xmetar -" to clear the widget display.
+// Note: Copies the METAR string to clipboard when executed.
+// Note: METAR parsing adapted from https://github.com/fboes/metar-parser Copyright (c) 2019 Frank Boës
+
+// Global variables
 
 let xmetar_result = null;
 let guid = 'df8f1874-245e-44b6-b017-0a69eeb5c231'
@@ -216,7 +223,6 @@ function parse_metar(metar) {
 // Widget toggle function
 // Hides and shows the widget on each run() call
 run(() => {
-    console.log('xMETAR: Widget run()');
     if (this.widgetStore.active) {
         this.host_el.classList.remove('visible');
         this.widgetStore.active = false;
@@ -283,24 +289,22 @@ search(prefixes, (query, callback) => {
                 this.$api.weather.find_metar_from_coords(lat, lon, (metar_callback) => {
                     // console.log('METAR: ' + JSON.stringify(metar_callback));
                     // metar_callback.metarString = "EDDB 211420Z AUTO 10010KT 9000 OVC006 BKN016 SCT026 FEW050 07/06 Q1018 NOSIG";
-                    metar_callback.metarString = "EDDB 211420Z AUTO 10001KT 060V140 9000 OVC006 BKN016 SCT026 FEW050 07/06 Q1018 NOSIG";
-                    // metar_callback.metarString = "EDDB 211420Z AUTO VRB01KT 9000 OVC006 BKN016 SCT026 FEW050 07/06 Q1018 NOSIG";
+                    // metar_callback.metarString = "EDDB 211420Z AUTO 10001KT 060V140 9000 OVC006 BKN016 SCT026 FEW050 07/06 Q1018 NOSIG";
+                    // metar_callback.metarString = "EDDB 211420Z AUTO VRB21KT 9000 OVC006 BKN016 SCT026 FEW050 07/06 Q1018 NOSIG";
                     // metar_callback.metarString = "EDDB 211420Z AUTO 10021KT 9000 CAVOK 07/06 Q1018 NOSIG";
                     if (airports[0].icao != metar_callback.icao) {
                         xmetar_result.subtext = '<p>No METAR for <i>' + icao + '</i> using <i>' + metar_callback.icao + '</i></p>';
                     }
                     xmetar_result.subtext += '<p>' + metar_callback.metarString + '</p>';
                     xmetar_result.is_note = true;
+                    this.$api.command.copy_text(metar_callback.metarString);
 
                     metar = parse_metar(metar_callback.metarString);
                     console.log('Parsed METAR: ' + JSON.stringify(metar));
 
-                    const container = document.createElement('div');
-                    container.innerHTML = `${metar.icao}`;
-                    this.host_el.appendChild(container);
-                    // for (cloud of metar.clouds) {
-                    //     xmetar_result.subtext += `<p>Clouds: ${cloud.code} at ${cloud.height ? cloud.height + ' ft' : 'N/A'}</p>`;
-                    // }
+                    // const container = document.createElement('div');
+                    // container.innerHTML = `${metar.icao}`;
+                    // this.host_el.appendChild(container);
                     this.metar_line.innerHTML = metar_callback.metarString;
 
                     this.widgetStore.active = true;
@@ -576,6 +580,7 @@ function drawWind(ctx, cx, cy, r, wind, length = 40) {
     if (wind.speed <= 10) { color = "lime"; fillColor = "rgba(90,255,90,0.15)"; }
     if (wind.speed > 10 && wind.speed <= 20) { color = "yellow"; fillColor = "rgba(255,255,90,0.25)"; }
     if (wind.speed > 20 && wind.speed <= 30) { color = "darkOrange"; fillColor = "rgba(255,165,0,0.25)"; }
+    
     if (wind.degrees === "VRB") {
         ctx.save();
         ctx.font = "bold 18px sans-serif";
@@ -584,23 +589,24 @@ function drawWind(ctx, cx, cy, r, wind, length = 40) {
         ctx.textBaseline = "middle";
         ctx.fillText("VRB", cx, cy);
         ctx.restore();
-        return;
-    }
-    const a = degToRad(wind.degrees);
+        drawWindSpeed(ctx, cx, cy, degToRad(0), 10, wind.speed + "kt", color);
+    } else {
+        const a = degToRad(wind.degrees);
 
-    if (wind.from && wind.to) {
-        const startRad = degToRad(wind.from + 180);
-        const endRad = degToRad(wind.to + 180);
-        ctx.beginPath();
-        ctx.moveTo(cx, cy);
-        ctx.arc(cx, cy, length + 5, startRad, endRad);
-        ctx.closePath();
-        ctx.fillStyle = fillColor;
-        ctx.fill();
-        console.log(`Drawing wind variation arc from ${wind.from} to ${wind.to}`);
+        if (wind.from && wind.to) {
+            const startRad = degToRad(wind.from + 180);
+            const endRad = degToRad(wind.to + 180);
+            ctx.beginPath();
+            ctx.moveTo(cx, cy);
+            ctx.arc(cx, cy, length + 5, startRad, endRad);
+            ctx.closePath();
+            ctx.fillStyle = fillColor;
+            ctx.fill();
+            console.log(`Drawing wind variation arc from ${wind.from} to ${wind.to}`);
+        }
+        drawArrow(ctx, cx, cy, degToRad(wind.degrees), length, color);
+        drawWindSpeed(ctx, cx, cy, degToRad(wind.degrees + 180), length, wind.speed + "kt", color);
     }
-    drawArrow(ctx, cx, cy, degToRad(wind.degrees), length, color);
-    drawWindSpeed(ctx, cx, cy, degToRad(wind.degrees + 180), length, wind.speed + "kt", color);
 }
 
 function doRender(airport, metar) {
@@ -617,19 +623,16 @@ function doRender(airport, metar) {
     const cy = radius + 10;
     
     drawCircle(this.ctx, cx, cy, radius, '#004000');
-    // console.log(`Airport runways: ${JSON.stringify(airport)}`);
-    for (const runway of airport.runways) {
-        // console.log(`Drawing runway at ${runway.direction}`);
-        drawRunway(this.ctx, cx, cy, radius - 25, runway, runway.primaryName.replace(/[0-9]/g, ''));
-        // drawRunway(this.ctx, cx, cy, radius, (runway.direction + 180) % 360);
+    if (airport && metar) {
+        // console.log(`Airport runways: ${JSON.stringify(airport)}`);
+        for (const runway of airport.runways) {
+            // console.log(`Drawing runway at ${runway.direction}`);
+            drawRunway(this.ctx, cx, cy, radius - 25, runway, runway.primaryName.replace(/[0-9]/g, ''));
+        }
+        drawWind(this.ctx, cx, cy, radius, metar.wind, 50);
+        drawCloudDiagram(this.ctx, 290, 180, 170, 150, metar.clouds);
     }
-    // drawRunway(this.ctx, cx, cy, radius, 60 + 90);
-    // drawRunway(this.ctx, cx, cy, radius, 90);
-    drawWind(this.ctx, cx, cy, radius, metar.wind, 50);
-    
     drawCompassRose(this.ctx, cx, cy, radius);
-
-    drawCloudDiagram(this.ctx, 290, 180, 170, 150, metar.clouds);
 }
 
 html_created(el => {
@@ -648,4 +651,5 @@ html_created(el => {
         return;
     }
     console.log('xMETAR: Canvas context initialized');
+    doRender.call(this, null, null);
 });
