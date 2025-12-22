@@ -309,7 +309,7 @@ search(prefixes, (query, callback) => {
     if (!query) { 
         return; 
     }
-    
+
     // test if query has sufficient parameters
     let data = query.toLowerCase().split(' ');
     if (data.length == 1 || !data[1] ) {
@@ -358,7 +358,22 @@ search(prefixes, (query, callback) => {
                     // metar_callback.metarString = "ENDU 220920Z VRB01KT 9999 1800W BCFG FEW001 SCT004 BKN045 OVC5100 M01/M01 Q1026 TEMPO 1200 PRFG BKN004 RMK WIND 1374FT 24003KT WIND 2165FT 27008KT";
                     // metar_callback.metarString = "ENDU 220920Z VRB01KT 9999 1800W BCFG OVC5100 M01/M01 Q1026 TEMPO 1200 PRFG BKN004 RMK WIND 1374FT 24003KT WIND 2165FT 27008KT";
                     // metar_callback.metarString = "KLAX 220853Z 00000KT 6SM BR FEW003 FEW008 SCT250 13/13 A3004 RMK AO2 SLP172 T01330128 57006 $";
-                    xmetar_result.subtext = '';
+
+                    // Check for live weather
+                    const weather = this.$api.weather.get_weather();
+                    const isLiveWeather = weather.sPresetName == 'TT:MENU.WEATHERTYPE_0DYNAMIC';
+                    if (isLiveWeather) {
+                        xmetar_result.subtext = '';
+                        if (this.metar_line) {
+                            this.metar_line.classList.remove('no_live_weather');
+                        }
+                    } else {
+                        xmetar_result.subtext = '<p>WARNING: Weather preset is active.</p>';
+                        if (this.metar_line) {
+                            this.metar_line.classList.add('no_live_weather');
+                        }
+                    }
+                    
                     if (airports[0].icao != metar_callback.icao) {
                         xmetar_result.subtext = '<p>No METAR for <i>' + icao + '</i> using <i>' + metar_callback.icao + '</i></p>';
                     }

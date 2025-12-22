@@ -25,6 +25,10 @@
     overflow: hidden;
 }
 
+#Ape42_xmetar_container.no_live_weather {
+    background-color: rgba(192, 0, 0, 0.5);
+}
+
 #Ape42_xmetar_canvas {
     /* border: 2px solid white; */
 }
