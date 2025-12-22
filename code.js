@@ -195,15 +195,17 @@ function parse_metar(metar) {
                     metar_data.visibility.sm = 10;
                     mode = 5; // no clouds & no conditions reported
                 } else if (match) {
+                    console.log(`xMETAR: visibility ${match}`);
                     if (match[3]) { // unit is SM
                         metar_data.visibility.source = "SM";
                         if (match[2]) { // visibility contains a fraction
                             metar_data.visibility.sm = Number(match[1])/Number(match[2]);
                             metar_data.visibility.sm_original = match[0];
                             // TODO: if you want to keep the string format
-                            // var whole = Math.floor(match[1] / match[2]);
-                            // var part = match[1] % match[2];
-                            // metar_data.visibility.sm_string = "" + (whole == 0 ? "" : whole + " ") + part + "/" + match[2];
+                            var whole = Math.floor(match[1] / match[2]);
+                            var part = match[1] % match[2];
+                            metar_data.visibility.sm_original = "" + (whole == 0 ? "" : whole + " ") + part + "/" + match[2];
+                            console.log(`xMETAR: ${metar_data.visibility.sm_string}`);
                         } else { // visibility contains a whole number.
                             metar_data.visibility.sm = Number(match[1]);
                         }
@@ -358,6 +360,7 @@ search(prefixes, (query, callback) => {
                     // metar_callback.metarString = "ENDU 220920Z VRB01KT 9999 1800W BCFG FEW001 SCT004 BKN045 OVC5100 M01/M01 Q1026 TEMPO 1200 PRFG BKN004 RMK WIND 1374FT 24003KT WIND 2165FT 27008KT";
                     // metar_callback.metarString = "ENDU 220920Z VRB01KT 9999 1800W BCFG OVC5100 M01/M01 Q1026 TEMPO 1200 PRFG BKN004 RMK WIND 1374FT 24003KT WIND 2165FT 27008KT";
                     // metar_callback.metarString = "KLAX 220853Z 00000KT 6SM BR FEW003 FEW008 SCT250 13/13 A3004 RMK AO2 SLP172 T01330128 57006 $";
+                    metar_callback.metarString = "KLAX 221436Z 10006KT 1 3/4SM R25L/4500VP6000FT BCFG BR BKN270 11/10 A3001 RMK AO2 VIS SE-S 1 FG SCT000 T01060100 $"
 
                     // Check for live weather
                     const weather = this.$api.weather.get_weather();
@@ -710,14 +713,14 @@ function formatVisibility(visibility) {
     if (!visibility) return null;
 
     if (visibility.source == "m") {
-        if (visibility.m >= 9999) return "VIS >=10km";
-        return `VIS ${visibility.m}m`;
+        if (visibility.m >= 9999) return "VIS >= 10 km";
+        return `VIS ${visibility.m} m`;
     } else if (visibility.source == "SM") {
         if (visibility.sm_original) {
-            return `VIS ${visibility.sm_original}SM`;
+            return `VIS ${visibility.sm_original} SM`;
         } else {
-            if (visibility.sm >= 10) return "VIS >=10SM";
-            return `VIS ${visibility.sm}SM`;
+            if (visibility.sm >= 10) return "VIS >= 10 SM";
+            return `VIS ${visibility.sm} SM`;
         }
     } else {
         return "VIS ≥10km";
