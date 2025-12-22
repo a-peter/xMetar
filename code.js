@@ -1,4 +1,4 @@
-// Version 0.4
+// Version 1.0
 // Author: Ape42
 // Description: xMETAR widget for Flow Pro - displays METAR information for a given ICAO code including wind and cloud diagram.
 // Usage: Type "xmetar &lt;ICAO&gt;" in Flow Pro search to get METAR information for the given ICAO code.
@@ -7,7 +7,7 @@
 // Note: METAR parsing adapted from https://github.com/fboes/metar-parser Copyright (c) 2019 Frank Boës
 
 // Global variables
-const debug_on = true;
+const debug_on = false;
 let xmetar_result = null;
 let guid = 'df8f1874-245e-44b6-b017-0a69eeb5c231'
 let xmetar_result_uid = 'xmetar_result_uid';
@@ -24,6 +24,7 @@ this.canvasHeight = this.canvasSize * 0.85;
 // Persistent storage for widget settings
 this.widgetStore = {
     active: false,
+    isLiveWeather: true,
     tempInCelsius: true,
     qnhInHpa: true,
     copyMetarToClipboard: true,
@@ -86,6 +87,22 @@ settings_define({
     }
 });
 
+// Check for live Weather and add/remove class for metar bar in widget.
+loop_1hz(() => {
+    const weather = this.$api.weather.get_weather();
+    const live = weather.sPresetName == 'TT:MENU.WEATHERTYPE_0DYNAMIC';
+    if (live != this.widgetStore.isLiveWeather) {
+        if (this.metar_line) {
+            if (live) {
+                this.metar_line.classList.remove('no_live_weather');
+            } else {
+                this.metar_line.classList.add('no_live_weather');
+            }
+        }
+        this.widgetStore.isLiveWeather = live;
+    }
+});
+
 // const resizeWidget = () => {
 //     if (this.host_el && this.canvas) {
 //         widget.style.width = `${canvasSize}px`;
@@ -104,9 +121,6 @@ function meters2miles(meter) { return meter / 1609.344; }
 function celsius2fahrenheit(celsius) { return celsius * 1.8 + 32; }
 function inhg2hpa(inhg) { return inhg * 33.863889532611; }
 function hpa2inhg(hpa) { return hpa * 0.02952998057228; }
-function parseCloud(code, height) {
-    return { 'code': code, 'height': height,  };
-}
 
 function fixWindUnits(unit) {
     if (unit === "MPS") {
@@ -184,7 +198,7 @@ function parse_metar(metar) {
 
                         mode = 3;
                     } else {
-                        console.log(`xMETAR: No wind info found in '${metar_parts[i]}'`);
+                        debug_on && console.log(`xMETAR: No wind info found in '${metar_parts[i]}'`);
                     }
                 }
                 break;
@@ -204,9 +218,9 @@ function parse_metar(metar) {
                             metar_data.visibility.sm = Number(match[1])/Number(match[2]);
                             metar_data.visibility.sm_original = match[0];
                             // TODO: if you want to keep the string format
-                            // var whole = Math.floor(match[1] / match[2]);
-                            // var part = match[1] % match[2];
-                            // metar_data.visibility.sm_string = "" + (whole == 0 ? "" : whole + " ") + part + "/" + match[2];
+                            var whole = Math.floor(match[1] / match[2]);
+                            var part = match[1] % match[2];
+                            metar_data.visibility.sm_original = "" + (whole == 0 ? "" : whole + " ") + part + "/" + match[2];
                         } else { // visibility contains a whole number.
                             metar_data.visibility.sm = Number(match[1]);
                         }
@@ -219,7 +233,7 @@ function parse_metar(metar) {
                     }
                     mode = 4;
                 } else {
-                    console.log("No vis match");
+                    debug_on && console.log("No vis match");
                 }
                 break;
             case 4:
@@ -312,7 +326,7 @@ search(prefixes, (query, callback) => {
     if (!query) { 
         return; 
     }
-    
+
     // test if query has sufficient parameters
     let data = query.toLowerCase().split(' ');
     if (data.length == 1 || !data[1] ) {
@@ -358,9 +372,14 @@ search(prefixes, (query, callback) => {
                     // metar_callback.metarString = "EDDB 211420Z AUTO 10001KT 060V140 9000 OVC006 BKN016 SCT026 FEW050 07/06 Q1018 NOSIG";
                     // metar_callback.metarString = "EDDB 211420Z AUTO VRB21KT 9000 OVC006 BKN016 SCT026 FEW050 07/06 Q1018 NOSIG";
                     // metar_callback.metarString = "EDDB 211420Z AUTO 10021KT 9000 CAVOK 07/06 Q1018 NOSIG";
-                    // metar_callback.metarString = "ENDU 220920Z VRB01KT 9999 1800W BCFG FEW001 SCT004 BKN045 M01/M01 Q1026 TEMPO 1200 PRFG BKN004 RMK WIND 1374FT 24003KT WIND 2165FT 27008KT";
+                    // metar_callback.metarString = "ENDU 220920Z VRB01KT 9999 1800W BCFG FEW001 SCT004 BKN045 OVC5100 M01/M01 Q1026 TEMPO 1200 PRFG BKN004 RMK WIND 1374FT 24003KT WIND 2165FT 27008KT";
+                    // metar_callback.metarString = "ENDU 220920Z VRB01KT 9999 1800W BCFG OVC5100 M01/M01 Q1026 TEMPO 1200 PRFG BKN004 RMK WIND 1374FT 24003KT WIND 2165FT 27008KT";
                     // metar_callback.metarString = "KLAX 220853Z 00000KT 6SM BR FEW003 FEW008 SCT250 13/13 A3004 RMK AO2 SLP172 T01330128 57006 $";
-                    xmetar_result.subtext = '';
+                    // metar_callback.metarString = "KLAX 221436Z 10006KT 1 3/4SM R25L/4500VP6000FT BCFG BR BKN270 11/10 A3001 RMK AO2 VIS SE-S 1 FG SCT000 T01060100 $"
+
+                    // Check for live weather
+                    xmetar_result.subtext = this.widgetStore.isLiveWeather ? '' : '<p>WARNING: Weather preset is active.</p>';
+                    
                     if (airports[0].icao != metar_callback.icao) {
                         xmetar_result.subtext = '<p>No METAR for <i>' + icao + '</i> using <i>' + metar_callback.icao + '</i></p>';
                     }
@@ -384,7 +403,7 @@ search(prefixes, (query, callback) => {
                     }
 
                     if (this.widgetStore.keepOpen) {
-                        console.log('xMETAR: Keeping widget open after search');
+                        debug_on && console.log('xMETAR: Keeping widget open after search');
                         callback([xmetar_result]);
                     }
                     return true;
@@ -452,43 +471,48 @@ function drawCloudLayer(ctx, x, yBottom, width, rowH, layer) {
 }
 
 function drawCloudDiagram(ctx, x, yBottom, width, height, clouds) {
-  const maxFt = 5000;
-  const stepFt = 1000;
-  const rows = maxFt / stepFt;
-  const rowH = height / rows;
+    const maxFt = 5000;
+    const stepFt = 1000;
+    const rows = maxFt / stepFt;
+    const rowH = height / rows;
 
-  ctx.save();
+    ctx.save();
 
-  // Grid + labels
-  ctx.strokeStyle = "#ccc";
-  ctx.lineWidth = 1;
-  ctx.font = "11px sans-serif";
-  ctx.fillStyle = "#000";
+    // Grid + labels
+    ctx.strokeStyle = "#ccc";
+    ctx.lineWidth = 1;
+    ctx.font = "11px sans-serif";
+    ctx.fillStyle = "#000";
 
-  for (let i = 0; i <= rows; i++) {
-    const y = yBottom - i * rowH;
-    ctx.beginPath();
-    ctx.moveTo(x, y);
-    ctx.lineTo(x + width, y);
-    ctx.stroke();
+    for (let i = 0; i <= rows; i++) {
+        const y = yBottom - i * rowH;
+        ctx.beginPath();
+        ctx.moveTo(x, y);
+        ctx.lineTo(x + width, y);
+        ctx.stroke();
 
-    ctx.fillText(`${i * stepFt}`, x - 30, y + 4);
-  }
+        ctx.fillText(`${i * stepFt}`, x - 30, y + 4);
+    }
 
-  // Draw clouds
-  if (!clouds || clouds.length === 0) {
+    // Draw clouds
     ctx.fillStyle = "#fff";
     ctx.font = "bold 14px sans-serif";
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
-    ctx.fillText("CAVOK / NSC", x + width / 2, yBottom - height / 2);
-  } else {
-    clouds.filter(layer => layer.height <= 5000).forEach(layer => {
-        drawCloudLayer(ctx, x, yBottom, width, rowH, layer);
-    });
-  }
+    if (!clouds || clouds.length === 0) {
+        ctx.fillText("CAVOK / NSC", x + width / 2, yBottom - height / 2);
+    } else {
+        const filteredClouds = clouds.filter(layer => layer.height <= 5000);
+        if (filteredClouds.length === 0) {
+            ctx.fillText("Clouds above 5000 ft", x + width / 2, yBottom - height - rowH / 2);
+        } else {
+            filteredClouds.forEach(layer => {
+                drawCloudLayer(ctx, x, yBottom, width, rowH, layer);
+            });
+        }
+    }
 
-  ctx.restore();
+    ctx.restore();
 }
 
 function degToRad(deg) {
@@ -589,11 +613,35 @@ function runwayLabelPositions(cx, cy, r, angleDeg) {
   ];
 }
 
-function drawRunway (ctx, cx, cy, r, runway) {
+
+// ?: { "name": "dirt", "color": "#8b6b4f"},
+// ?: { "name": "gravel", "color": "#b5a27a"},
+const runwayColors = {
+    0: { "name": "concrete", "color": "#9e9e9e"},
+    1: { "name": "grass", "color": "#4f7f4f"},
+    4: { "name": "asphalt", "color": "#4a4a4a"},
+    5: { "name": "grass", "color": "#4f7f4f"},
+    17: { "name": "bituminous", "color": "#5f6f7f"},
+    34: { "name": "unknown", "color": "#777777"},
+    255: { "name": "unknown", "color": "#777777"},
+}
+
+function mapSurfaceToColor(surface, icao) {
+    if (!surface || !runwayColors[surface]) {
+        if (!runwayColors[surface]) {
+            console.warn(`xMETAR: Unknown surface at ${icao}: ${surface}`);
+        }
+        return runwayColors[34].color;
+    } else {
+        return runwayColors[surface].color;
+    }
+}
+
+function drawRunway (ctx, cx, cy, r, runway, icao) {
     // runway.direction + 90, runway.primaryName, runway.secondaryName
     const angleDeg = runway.direction; // + 90;
     const a = degToRad(runway.direction); // + 90);
-
+    // console.log(`xMETAR: Runway surface ${runway.primaryName}-${runway.secondaryName} = ${runway.surface}`);
     const x1 = cx + Math.cos(a) * r;
     const y1 = cy + Math.sin(a) * r;
     const x2 = cx - Math.cos(a) * r;
@@ -602,7 +650,8 @@ function drawRunway (ctx, cx, cy, r, runway) {
     ctx.beginPath();
     ctx.moveTo(x1, y1);
     ctx.lineTo(x2, y2);
-    ctx.strokeStyle = "#555";
+    ctx.strokeStyle = mapSurfaceToColor(runway.surface, icao);
+    // console.log(`xMETAR: Runway color ${runway.surface} = ${ctx.strokeStyle}`);
     ctx.lineWidth = 10;
     ctx.stroke();
 
@@ -614,16 +663,19 @@ function drawRunway (ctx, cx, cy, r, runway) {
 }
 
 function drawArrow(ctx, x, y, angle, length, color = "red") {
+    const half = length / 2;
+
     ctx.save();
     ctx.translate(x, y);
     ctx.rotate(angle);
 
     ctx.beginPath();
-    ctx.moveTo(0, 0);
-    ctx.lineTo(-length, 0);
-    ctx.lineTo(-length + 10, -6);
-    ctx.moveTo(-length, 0);
-    ctx.lineTo(-length + 10, 6);
+    ctx.moveTo(-half, 0);
+    ctx.lineTo(half, 0);
+    ctx.moveTo(-half, 0);
+    ctx.lineTo(-half + 10, 6);
+    ctx.moveTo(-half, 0);
+    ctx.lineTo(-half + 10, -6);
 
     ctx.strokeStyle = color;
     ctx.lineWidth = 2;
@@ -634,7 +686,7 @@ function drawArrow(ctx, x, y, angle, length, color = "red") {
 function drawWindSpeed(ctx, cx, cy, angleRad, arrowLength, speed, color = "red") {
     if (speed == null) return;
 
-    const offset = 20; // distance beyond arrow tip
+    const offset = -5; // distance beyond arrow tip
 
     const tx = cx + Math.cos(angleRad) * (arrowLength + offset);
     const ty = cy + Math.sin(angleRad) * (arrowLength + offset);
@@ -692,14 +744,14 @@ function formatVisibility(visibility) {
     if (!visibility) return null;
 
     if (visibility.source == "m") {
-        if (visibility.m >= 9999) return "VIS >=10km";
-        return `VIS ${visibility.m}m`;
+        if (visibility.m >= 9999) return "VIS >= 10 km";
+        return `VIS ${visibility.m} m`;
     } else if (visibility.source == "SM") {
         if (visibility.sm_original) {
-            return `VIS ${visibility.sm_original}SM`;
+            return `VIS ${visibility.sm_original} SM`;
         } else {
-            if (visibility.sm >= 10) return "VIS >=10SM";
-            return `VIS ${visibility.sm}SM`;
+            if (visibility.sm >= 10) return "VIS >= 10 SM";
+            return `VIS ${visibility.sm} SM`;
         }
     } else {
         return "VIS ≥10km";
@@ -766,11 +818,6 @@ function drawQnhAltimeter(ctx, x, y, width, pressure) {
         text += `QNH ${pressure.inhg.toFixed(2)}`
     }
 
-    // if (altInHg != null) {
-    //     const altStr = `A${Math.round(altInHg * 100)}`;
-    //     text += text ? `  ${altStr}` : altStr;
-    // }
-
     ctx.fillText(text, x, y);
     ctx.restore();
 }
@@ -826,7 +873,7 @@ function drawFlightCategoryBadge(ctx, x, y, category) {
 
 function doRender(airport, metar) {
     if (!this.ctx) {
-        console.log('xMETAR: No canvas context for rendering');
+        console.error('xMETAR: No canvas context for rendering');
         return;
     }
 
@@ -839,10 +886,9 @@ function doRender(airport, metar) {
     
     drawCircle(this.ctx, cx, cy, radius, '#004000');
     if (airport && metar) {
-        // console.log(`Airport runways: ${JSON.stringify(airport)}`);
+        // console.log(`Airport runways: ${JSON.stringify(airport.runways)}`);
         for (const runway of airport.runways) {
-            // console.log(`Drawing runway at ${runway.direction}`);
-            drawRunway(this.ctx, cx, cy, radius - 25, runway, runway.primaryName.replace(/[0-9]/g, ''));
+            drawRunway(this.ctx, cx, cy, radius - 25, runway, airport.icao); //, runway.primaryName.replace(/[0-9]/g, ''));
         }
         drawWind(this.ctx, cx, cy, radius, metar.wind, 50);
         drawCloudDiagram(this.ctx, 290, 180, 170, 150, metar.clouds);
@@ -861,12 +907,12 @@ html_created(el => {
     this.metar_line = el.querySelector('#Ape42_xmetar_container');
 
     if (!this.canvas) {
-        console.log('xMETAR: Canvas not found');
+        console.error('xMETAR: Canvas not found');
         return;
     }
     this.ctx = this.canvas.getContext('2d');
     if (!this.ctx) {
-        console.log('xMETAR: Canvas context not found');
+        console.error('xMETAR: Canvas context not found');
         return;
     }
 
@@ -880,11 +926,11 @@ html_created(el => {
         this.canvas.style.width = cssWidth + 'px';
         this.canvas.style.height = cssHeight + 'px';
         this.ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-        console.log(`xMETAR: Set HiDPI scaling with DPR=${dpr}`);
+        debug_on && console.log(`xMETAR: Set HiDPI scaling with DPR=${dpr}`);
     } catch (e) {
-        console.error('xMETAR: Error setting HiDPI scaling: ' + e);
+        debug_on && console.error('xMETAR: Error setting HiDPI scaling: ' + e);
     }
 
-    console.log('xMETAR: Canvas context initialized');
+    debug_on && console.log('xMETAR: Canvas context initialized');
     doRender.call(this, null, null);
 });
