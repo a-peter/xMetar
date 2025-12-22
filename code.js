@@ -104,9 +104,6 @@ function meters2miles(meter) { return meter / 1609.344; }
 function celsius2fahrenheit(celsius) { return celsius * 1.8 + 32; }
 function inhg2hpa(inhg) { return inhg * 33.863889532611; }
 function hpa2inhg(hpa) { return hpa * 0.02952998057228; }
-function parseCloud(code, height) {
-    return { 'code': code, 'height': height,  };
-}
 
 function fixWindUnits(unit) {
     if (unit === "MPS") {
@@ -358,7 +355,8 @@ search(prefixes, (query, callback) => {
                     // metar_callback.metarString = "EDDB 211420Z AUTO 10001KT 060V140 9000 OVC006 BKN016 SCT026 FEW050 07/06 Q1018 NOSIG";
                     // metar_callback.metarString = "EDDB 211420Z AUTO VRB21KT 9000 OVC006 BKN016 SCT026 FEW050 07/06 Q1018 NOSIG";
                     // metar_callback.metarString = "EDDB 211420Z AUTO 10021KT 9000 CAVOK 07/06 Q1018 NOSIG";
-                    // metar_callback.metarString = "ENDU 220920Z VRB01KT 9999 1800W BCFG FEW001 SCT004 BKN045 M01/M01 Q1026 TEMPO 1200 PRFG BKN004 RMK WIND 1374FT 24003KT WIND 2165FT 27008KT";
+                    // metar_callback.metarString = "ENDU 220920Z VRB01KT 9999 1800W BCFG FEW001 SCT004 BKN045 OVC5100 M01/M01 Q1026 TEMPO 1200 PRFG BKN004 RMK WIND 1374FT 24003KT WIND 2165FT 27008KT";
+                    // metar_callback.metarString = "ENDU 220920Z VRB01KT 9999 1800W BCFG OVC5100 M01/M01 Q1026 TEMPO 1200 PRFG BKN004 RMK WIND 1374FT 24003KT WIND 2165FT 27008KT";
                     // metar_callback.metarString = "KLAX 220853Z 00000KT 6SM BR FEW003 FEW008 SCT250 13/13 A3004 RMK AO2 SLP172 T01330128 57006 $";
                     xmetar_result.subtext = '';
                     if (airports[0].icao != metar_callback.icao) {
@@ -452,43 +450,48 @@ function drawCloudLayer(ctx, x, yBottom, width, rowH, layer) {
 }
 
 function drawCloudDiagram(ctx, x, yBottom, width, height, clouds) {
-  const maxFt = 5000;
-  const stepFt = 1000;
-  const rows = maxFt / stepFt;
-  const rowH = height / rows;
+    const maxFt = 5000;
+    const stepFt = 1000;
+    const rows = maxFt / stepFt;
+    const rowH = height / rows;
 
-  ctx.save();
+    ctx.save();
 
-  // Grid + labels
-  ctx.strokeStyle = "#ccc";
-  ctx.lineWidth = 1;
-  ctx.font = "11px sans-serif";
-  ctx.fillStyle = "#000";
+    // Grid + labels
+    ctx.strokeStyle = "#ccc";
+    ctx.lineWidth = 1;
+    ctx.font = "11px sans-serif";
+    ctx.fillStyle = "#000";
 
-  for (let i = 0; i <= rows; i++) {
-    const y = yBottom - i * rowH;
-    ctx.beginPath();
-    ctx.moveTo(x, y);
-    ctx.lineTo(x + width, y);
-    ctx.stroke();
+    for (let i = 0; i <= rows; i++) {
+        const y = yBottom - i * rowH;
+        ctx.beginPath();
+        ctx.moveTo(x, y);
+        ctx.lineTo(x + width, y);
+        ctx.stroke();
 
-    ctx.fillText(`${i * stepFt}`, x - 30, y + 4);
-  }
+        ctx.fillText(`${i * stepFt}`, x - 30, y + 4);
+    }
 
-  // Draw clouds
-  if (!clouds || clouds.length === 0) {
+    // Draw clouds
     ctx.fillStyle = "#fff";
     ctx.font = "bold 14px sans-serif";
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
-    ctx.fillText("CAVOK / NSC", x + width / 2, yBottom - height / 2);
-  } else {
-    clouds.filter(layer => layer.height <= 5000).forEach(layer => {
-        drawCloudLayer(ctx, x, yBottom, width, rowH, layer);
-    });
-  }
+    if (!clouds || clouds.length === 0) {
+        ctx.fillText("CAVOK / NSC", x + width / 2, yBottom - height / 2);
+    } else {
+        const filteredClouds = clouds.filter(layer => layer.height <= 5000);
+        if (filteredClouds.length === 0) {
+            ctx.fillText("Clouds above 5000 ft", x + width / 2, yBottom - height - rowH / 2);
+        } else {
+            filteredClouds.forEach(layer => {
+                drawCloudLayer(ctx, x, yBottom, width, rowH, layer);
+            });
+        }
+    }
 
-  ctx.restore();
+    ctx.restore();
 }
 
 function degToRad(deg) {
