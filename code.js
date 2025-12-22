@@ -1,4 +1,4 @@
-// Version 0.4
+// Version 1.0
 // Author: Ape42
 // Description: xMETAR widget for Flow Pro - displays METAR information for a given ICAO code including wind and cloud diagram.
 // Usage: Type "xmetar &lt;ICAO&gt;" in Flow Pro search to get METAR information for the given ICAO code.
@@ -7,7 +7,7 @@
 // Note: METAR parsing adapted from https://github.com/fboes/metar-parser Copyright (c) 2019 Frank Boës
 
 // Global variables
-const debug_on = true;
+const debug_on = false;
 let xmetar_result = null;
 let guid = 'df8f1874-245e-44b6-b017-0a69eeb5c231'
 let xmetar_result_uid = 'xmetar_result_uid';
@@ -198,7 +198,7 @@ function parse_metar(metar) {
 
                         mode = 3;
                     } else {
-                        console.log(`xMETAR: No wind info found in '${metar_parts[i]}'`);
+                        debug_on && console.log(`xMETAR: No wind info found in '${metar_parts[i]}'`);
                     }
                 }
                 break;
@@ -233,7 +233,7 @@ function parse_metar(metar) {
                     }
                     mode = 4;
                 } else {
-                    console.log("No vis match");
+                    debug_on && console.log("No vis match");
                 }
                 break;
             case 4:
@@ -403,7 +403,7 @@ search(prefixes, (query, callback) => {
                     }
 
                     if (this.widgetStore.keepOpen) {
-                        console.log('xMETAR: Keeping widget open after search');
+                        debug_on && console.log('xMETAR: Keeping widget open after search');
                         callback([xmetar_result]);
                     }
                     return true;
@@ -620,8 +620,10 @@ const runwayColors = {
     0: { "name": "concrete", "color": "#9e9e9e"},
     1: { "name": "grass", "color": "#4f7f4f"},
     4: { "name": "asphalt", "color": "#4a4a4a"},
+    5: { "name": "grass", "color": "#4f7f4f"},
     17: { "name": "bituminous", "color": "#5f6f7f"},
     34: { "name": "unknown", "color": "#777777"},
+    255: { "name": "unknown", "color": "#777777"},
 }
 
 function mapSurfaceToColor(surface, icao) {
@@ -816,11 +818,6 @@ function drawQnhAltimeter(ctx, x, y, width, pressure) {
         text += `QNH ${pressure.inhg.toFixed(2)}`
     }
 
-    // if (altInHg != null) {
-    //     const altStr = `A${Math.round(altInHg * 100)}`;
-    //     text += text ? `  ${altStr}` : altStr;
-    // }
-
     ctx.fillText(text, x, y);
     ctx.restore();
 }
@@ -876,7 +873,7 @@ function drawFlightCategoryBadge(ctx, x, y, category) {
 
 function doRender(airport, metar) {
     if (!this.ctx) {
-        console.log('xMETAR: No canvas context for rendering');
+        console.error('xMETAR: No canvas context for rendering');
         return;
     }
 
@@ -910,12 +907,12 @@ html_created(el => {
     this.metar_line = el.querySelector('#Ape42_xmetar_container');
 
     if (!this.canvas) {
-        console.log('xMETAR: Canvas not found');
+        console.error('xMETAR: Canvas not found');
         return;
     }
     this.ctx = this.canvas.getContext('2d');
     if (!this.ctx) {
-        console.log('xMETAR: Canvas context not found');
+        console.error('xMETAR: Canvas context not found');
         return;
     }
 
@@ -929,11 +926,11 @@ html_created(el => {
         this.canvas.style.width = cssWidth + 'px';
         this.canvas.style.height = cssHeight + 'px';
         this.ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-        console.log(`xMETAR: Set HiDPI scaling with DPR=${dpr}`);
+        debug_on && console.log(`xMETAR: Set HiDPI scaling with DPR=${dpr}`);
     } catch (e) {
-        console.error('xMETAR: Error setting HiDPI scaling: ' + e);
+        debug_on && console.error('xMETAR: Error setting HiDPI scaling: ' + e);
     }
 
-    console.log('xMETAR: Canvas context initialized');
+    debug_on && console.log('xMETAR: Canvas context initialized');
     doRender.call(this, null, null);
 });
