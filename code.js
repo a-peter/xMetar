@@ -7,7 +7,7 @@
 // Note: METAR parsing adapted from https://github.com/fboes/metar-parser Copyright (c) 2019 Frank Boës
 
 // Global variables
-
+const debug_on = true;
 let xmetar_result = null;
 let guid = 'df8f1874-245e-44b6-b017-0a69eeb5c231'
 let xmetar_result_uid = 'xmetar_result_uid';
@@ -110,15 +110,15 @@ function parse_metar(metar) {
     for (let i = 0; i < metar_parts.length; i++) {
         // Preconditions for missing parts
         if (mode < 3 && metar_parts[i].match(/^(\d+)(?:\/(\d+))?(SM)?$/)) { // /^[0-9]{2}\/[0-9]{2}$/
-            mode = 3; // no wind reported
+            mode = 3; // no wind reported, skipping to visibility
             // console.log('No wind reported');
         }
         if (mode < 5 && metar_parts[i].match(/^(FEW|SCT|BKN|OVC)(\d+)?/)) {
-            mode = 5; // no visibility or conditions reported
+            mode = 5; // no visibility or conditions reported, skipping to clouds
             // console.log('No visibility reported');
         }
         if (mode < 6 && metar_parts[i].match(/(^(M?\d+)\/(M?\d+)$)|(^\/\/\/\/\/)/)) {
-            mode = 6; // end of clouds
+            mode = 6; // end of clouds, skipping to temperature
             // console.log('End of cloud report');
         }
         // console.log(`metar_parts[${i}] = ${metar_parts[i]}, mode = ${mode}`);
@@ -141,7 +141,7 @@ function parse_metar(metar) {
                 }
                 break;
             case 2:
-                // Wind
+                // Wind, skipt AUTO if present
                 if (metar_parts[i] != 'AUTO') {
                     match = metar_parts[i].match(/^(\d\d\d|VRB)P?(\d+)(?:G(\d+))?(KT|MPS|KMH)/);
                     if (match) {
@@ -150,21 +150,20 @@ function parse_metar(metar) {
                         metar_data.wind.speed = Number(match[2]);
                         metar_data.wind.gusts = (match[3] && match[3].length > 0 ? Number(match[3]) : null);
 
-                        if (metar_parts[i+1] != "CAVOK" && metar_parts[i+1].indexOf("V", 0) >= 0) {
-                            var match2 = metar_parts[i+1].match(/^(\d\d\d)V(\d\d\d)/);
-                            // metar_data.wind.degrees = {};
-                            metar_data.wind.from = Number(match2[1]);
-                            metar_data.wind.to = Number(match2[2]);
-                            i += 1;
+                        if (metar_parts[i+1] && metar_parts[i+1] !== "CAVOK" && metar_parts[i+1].indexOf("V", 0) >= 0) {
+                            const match2 = metar_parts[i+1].match(/^(\d\d\d)V(\d\d\d)/);
+                            if (match2) {
+                                metar_data.wind.from = Number(match2[1]);
+                                metar_data.wind.to = Number(match2[2]);
+                                i += 1;
+                            }
                         }
                         // fixWindUnits(match[4]); // TODO: implement unit conversion if needed, but in which case?
 
                         mode = 3;
                     } else {
-                        console.log(`xMETAR: No wind info found in`);
+                        console.log(`xMETAR: No wind info found in '${metar_parts[i]}'`);
                     }
-                } else { // is AUTO
-                    // console.log(`xMETAR: Auto generated METAR`);
                 }
                 break;
             case 3:
@@ -333,6 +332,7 @@ search(prefixes, (query, callback) => {
                     // metar_callback.metarString = "EDDB 211420Z AUTO 10001KT 060V140 9000 OVC006 BKN016 SCT026 FEW050 07/06 Q1018 NOSIG";
                     // metar_callback.metarString = "EDDB 211420Z AUTO VRB21KT 9000 OVC006 BKN016 SCT026 FEW050 07/06 Q1018 NOSIG";
                     // metar_callback.metarString = "EDDB 211420Z AUTO 10021KT 9000 CAVOK 07/06 Q1018 NOSIG";
+                    xmetar_result.subtext = '';
                     if (airports[0].icao != metar_callback.icao) {
                         xmetar_result.subtext = '<p>No METAR for <i>' + icao + '</i> using <i>' + metar_callback.icao + '</i></p>';
                     }
@@ -344,7 +344,6 @@ search(prefixes, (query, callback) => {
 
                     metar = parse_metar(metar_callback.metarString);
                     console.log('Parsed METAR: ' + JSON.stringify(metar));
-
                     this.metar_line.innerHTML = metar_callback.metarString;
                     
                     try {
@@ -375,11 +374,9 @@ style(() => {
     if (this.host_el) {
         if (this.widgetStore.active) {
             this.host_el.classList.add('visible');
-            // console.log('show');
         }
         else {
             this.host_el.classList.remove('visible');
-            // console.log('hide');
         }
     }
     return this.widgetStore.active ? 'active' : null;
@@ -624,9 +621,12 @@ function drawWindSpeed(ctx, cx, cy, angleRad, arrowLength, speed, color = "red")
 
 function drawWind(ctx, cx, cy, r, wind, length = 40) {
     let color = "red", fillColor = "rgba(255,90,90,0.25)";
-    if (wind.speed <= 10) { color = "lime"; fillColor = "rgba(90,255,90,0.15)"; }
-    if (wind.speed > 10 && wind.speed <= 20) { color = "yellow"; fillColor = "rgba(255,255,90,0.25)"; }
-    if (wind.speed > 20 && wind.speed <= 30) { color = "darkOrange"; fillColor = "rgba(255,165,0,0.25)"; }
+
+    if (!isNaN(wind.speed)) {
+        if (wind.speed <= 10) { color = "lime"; fillColor = "rgba(90,255,90,0.15)"; }
+        if (wind.speed > 10 && wind.speed <= 20) { color = "yellow"; fillColor = "rgba(255,255,90,0.25)"; }
+        if (wind.speed > 20 && wind.speed <= 30) { color = "darkOrange"; fillColor = "rgba(255,165,0,0.25)"; }
+    }
     
     if (wind.degrees === "VRB") {
         ctx.save();
@@ -649,7 +649,7 @@ function drawWind(ctx, cx, cy, r, wind, length = 40) {
             ctx.closePath();
             ctx.fillStyle = fillColor;
             ctx.fill();
-            console.log(`Drawing wind variation arc from ${wind.from} to ${wind.to}`);
+            debug_on && console.log(`Drawing wind variation arc from ${wind.from} to ${wind.to}`);
         }
         drawArrow(ctx, cx, cy, degToRad(wind.degrees), length, color);
         drawWindSpeed(ctx, cx, cy, degToRad(wind.degrees + 180), length, wind.speed + "kt", color);
@@ -685,7 +685,6 @@ function doRender(airport, metar) {
 html_created(el => {
     this.host_el = el.querySelector('#Ape42_xmetar');
     this.canvas = el.querySelector('#Ape42_xmetar_canvas');
-    // console.log(`canvas: ${this.canvas}`)
     this.metar_line = el.querySelector('#Ape42_xmetar_container');
 
     if (!this.canvas) {
@@ -697,6 +696,22 @@ html_created(el => {
         console.log('xMETAR: Canvas context not found');
         return;
     }
+
+    // HiDPI scaling
+    try {
+        const dpr = this.host_el.devicePixelRatio || 1;
+        const cssWidth = this.canvas.clientWidth || 450;
+        const cssHeight = this.canvas.clientHeight || 380;
+        this.canvas.width = Math.round(cssWidth * dpr);
+        this.canvas.height = Math.round(cssHeight * dpr);
+        this.canvas.style.width = cssWidth + 'px';
+        this.canvas.style.height = cssHeight + 'px';
+        this.ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+        console.log(`xMETAR: Set HiDPI scaling with DPR=${dpr}`);
+    } catch (e) {
+        console.error('xMETAR: Error setting HiDPI scaling: ' + e);
+    }
+
     console.log('xMETAR: Canvas context initialized');
     doRender.call(this, null, null);
 });
