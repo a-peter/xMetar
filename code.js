@@ -661,16 +661,19 @@ function drawRunway (ctx, cx, cy, r, runway, icao) {
 }
 
 function drawArrow(ctx, x, y, angle, length, color = "red") {
+    const half = length / 2;
+
     ctx.save();
     ctx.translate(x, y);
     ctx.rotate(angle);
 
     ctx.beginPath();
-    ctx.moveTo(0, 0);
-    ctx.lineTo(-length, 0);
-    ctx.lineTo(-length + 10, -6);
-    ctx.moveTo(-length, 0);
-    ctx.lineTo(-length + 10, 6);
+    ctx.moveTo(-half, 0);
+    ctx.lineTo(half, 0);
+    ctx.moveTo(-half, 0);
+    ctx.lineTo(-half + 10, 6);
+    ctx.moveTo(-half, 0);
+    ctx.lineTo(-half + 10, -6);
 
     ctx.strokeStyle = color;
     ctx.lineWidth = 2;
@@ -681,7 +684,7 @@ function drawArrow(ctx, x, y, angle, length, color = "red") {
 function drawWindSpeed(ctx, cx, cy, angleRad, arrowLength, speed, color = "red") {
     if (speed == null) return;
 
-    const offset = 20; // distance beyond arrow tip
+    const offset = -5; // distance beyond arrow tip
 
     const tx = cx + Math.cos(angleRad) * (arrowLength + offset);
     const ty = cy + Math.sin(angleRad) * (arrowLength + offset);
