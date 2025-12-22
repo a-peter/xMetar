@@ -613,11 +613,33 @@ function runwayLabelPositions(cx, cy, r, angleDeg) {
   ];
 }
 
-function drawRunway (ctx, cx, cy, r, runway) {
+
+// ?: { "name": "dirt", "color": "#8b6b4f"},
+// ?: { "name": "gravel", "color": "#b5a27a"},
+const runwayColors = {
+    0: { "name": "concrete", "color": "#9e9e9e"},
+    1: { "name": "grass", "color": "#4f7f4f"},
+    4: { "name": "asphalt", "color": "#4a4a4a"},
+    17: { "name": "bituminous", "color": "#5f6f7f"},
+    34: { "name": "unknown", "color": "#777777"},
+}
+
+function mapSurfaceToColor(surface, icao) {
+    if (!surface || !runwayColors[surface]) {
+        if (!runwayColors[surface]) {
+            console.warn(`xMETAR: Unknown surface at ${icao}: ${surface}`);
+        }
+        return runwayColors[34].color;
+    } else {
+        return runwayColors[surface].color;
+    }
+}
+
+function drawRunway (ctx, cx, cy, r, runway, icao) {
     // runway.direction + 90, runway.primaryName, runway.secondaryName
     const angleDeg = runway.direction; // + 90;
     const a = degToRad(runway.direction); // + 90);
-
+    // console.log(`xMETAR: Runway surface ${runway.primaryName}-${runway.secondaryName} = ${runway.surface}`);
     const x1 = cx + Math.cos(a) * r;
     const y1 = cy + Math.sin(a) * r;
     const x2 = cx - Math.cos(a) * r;
@@ -626,7 +648,8 @@ function drawRunway (ctx, cx, cy, r, runway) {
     ctx.beginPath();
     ctx.moveTo(x1, y1);
     ctx.lineTo(x2, y2);
-    ctx.strokeStyle = "#555";
+    ctx.strokeStyle = mapSurfaceToColor(runway.surface, icao);
+    // console.log(`xMETAR: Runway color ${runway.surface} = ${ctx.strokeStyle}`);
     ctx.lineWidth = 10;
     ctx.stroke();
 
@@ -863,10 +886,9 @@ function doRender(airport, metar) {
     
     drawCircle(this.ctx, cx, cy, radius, '#004000');
     if (airport && metar) {
-        // console.log(`Airport runways: ${JSON.stringify(airport)}`);
+        // console.log(`Airport runways: ${JSON.stringify(airport.runways)}`);
         for (const runway of airport.runways) {
-            // console.log(`Drawing runway at ${runway.direction}`);
-            drawRunway(this.ctx, cx, cy, radius - 25, runway, runway.primaryName.replace(/[0-9]/g, ''));
+            drawRunway(this.ctx, cx, cy, radius - 25, runway, airport.icao); //, runway.primaryName.replace(/[0-9]/g, ''));
         }
         drawWind(this.ctx, cx, cy, radius, metar.wind, 50);
         drawCloudDiagram(this.ctx, 290, 180, 170, 150, metar.clouds);
