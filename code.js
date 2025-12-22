@@ -7,7 +7,7 @@
 // Note: METAR parsing adapted from https://github.com/fboes/metar-parser Copyright (c) 2019 Frank Boës
 
 // Global variables
-
+const debug_on = true;
 let xmetar_result = null;
 let guid = 'df8f1874-245e-44b6-b017-0a69eeb5c231'
 let xmetar_result_uid = 'xmetar_result_uid';
@@ -24,6 +24,8 @@ this.canvasHeight = this.canvasSize * 0.85;
 // Persistent storage for widget settings
 this.widgetStore = {
     active: false,
+    tempInCelsius: true,
+    qnhInHpa: true,
     copyMetarToClipboard: true,
     keepOpen: true,
     showWidgetAfterMetarFetch: true,
@@ -32,6 +34,26 @@ this.$api.datastore.import(this.widgetStore);
 
 // Settings definition
 settings_define({
+    tempInCelsius: {
+        label: 'Temperature in °C',
+        type: 'checkbox',
+        description: 'Choose temperature units: C or F',
+        value: this.widgetStore.tempInCelsius,
+        changed: (value) => {
+            this.widgetStore.tempInCelsius = value;
+            this.$api.datastore.export(this.widgetStore);
+        }
+    },
+    qnhInHpa: {
+        label: 'QNH in hPa',
+        type: 'checkbox',
+        description: 'Choose QNH units: hPa or inHg',
+        value: this.widgetStore.qnhInHpa,
+        changed: (value) => {
+            this.widgetStore.qnhInHpa = value;
+            this.$api.datastore.export(this.widgetStore);
+        }
+    },
     copyMetarToClipboard: {
         label: 'Copy METAR',
         type: 'checkbox',
@@ -110,15 +132,15 @@ function parse_metar(metar) {
     for (let i = 0; i < metar_parts.length; i++) {
         // Preconditions for missing parts
         if (mode < 3 && metar_parts[i].match(/^(\d+)(?:\/(\d+))?(SM)?$/)) { // /^[0-9]{2}\/[0-9]{2}$/
-            mode = 3; // no wind reported
+            mode = 3; // no wind reported, skipping to visibility
             // console.log('No wind reported');
         }
         if (mode < 5 && metar_parts[i].match(/^(FEW|SCT|BKN|OVC)(\d+)?/)) {
-            mode = 5; // no visibility or conditions reported
+            mode = 5; // no visibility or conditions reported, skipping to clouds
             // console.log('No visibility reported');
         }
         if (mode < 6 && metar_parts[i].match(/(^(M?\d+)\/(M?\d+)$)|(^\/\/\/\/\/)/)) {
-            mode = 6; // end of clouds
+            mode = 6; // end of clouds, skipping to temperature
             // console.log('End of cloud report');
         }
         // console.log(`metar_parts[${i}] = ${metar_parts[i]}, mode = ${mode}`);
@@ -141,7 +163,7 @@ function parse_metar(metar) {
                 }
                 break;
             case 2:
-                // Wind
+                // Wind, skipt AUTO if present
                 if (metar_parts[i] != 'AUTO') {
                     match = metar_parts[i].match(/^(\d\d\d|VRB)P?(\d+)(?:G(\d+))?(KT|MPS|KMH)/);
                     if (match) {
@@ -150,21 +172,20 @@ function parse_metar(metar) {
                         metar_data.wind.speed = Number(match[2]);
                         metar_data.wind.gusts = (match[3] && match[3].length > 0 ? Number(match[3]) : null);
 
-                        if (metar_parts[i+1] != "CAVOK" && metar_parts[i+1].indexOf("V", 0) >= 0) {
-                            var match2 = metar_parts[i+1].match(/^(\d\d\d)V(\d\d\d)/);
-                            // metar_data.wind.degrees = {};
-                            metar_data.wind.from = Number(match2[1]);
-                            metar_data.wind.to = Number(match2[2]);
-                            i += 1;
+                        if (metar_parts[i+1] && metar_parts[i+1] !== "CAVOK" && metar_parts[i+1].indexOf("V", 0) >= 0) {
+                            const match2 = metar_parts[i+1].match(/^(\d\d\d)V(\d\d\d)/);
+                            if (match2) {
+                                metar_data.wind.from = Number(match2[1]);
+                                metar_data.wind.to = Number(match2[2]);
+                                i += 1;
+                            }
                         }
                         // fixWindUnits(match[4]); // TODO: implement unit conversion if needed, but in which case?
 
                         mode = 3;
                     } else {
-                        console.log(`xMETAR: No wind info found in`);
+                        console.log(`xMETAR: No wind info found in '${metar_parts[i]}'`);
                     }
-                } else { // is AUTO
-                    // console.log(`xMETAR: Auto generated METAR`);
                 }
                 break;
             case 3:
@@ -172,13 +193,16 @@ function parse_metar(metar) {
                 match = metar_parts[i].match(/^(\d+)(?:\/(\d+))?(SM)?$/);
                 metar_data.visibility = {};
                 if (metar_parts[i] === "CAVOK" || metar_parts[i] === "CLR") {
+                    metar_data.visibility.source = "CAVOK";
                     metar_data.visibility.m = 9999;
                     metar_data.visibility.sm = 10;
                     mode = 5; // no clouds & no conditions reported
                 } else if (match) {
                     if (match[3]) { // unit is SM
+                        metar_data.visibility.source = "SM";
                         if (match[2]) { // visibility contains a fraction
                             metar_data.visibility.sm = Number(match[1])/Number(match[2]);
+                            metar_data.visibility.sm_original = match[0];
                             // TODO: if you want to keep the string format
                             // var whole = Math.floor(match[1] / match[2]);
                             // var part = match[1] % match[2];
@@ -189,7 +213,8 @@ function parse_metar(metar) {
 
                         metar_data.visibility.m = Math.ceil(miles2meters(metar_data.visibility.sm));
                     } else { // no unit -> meters
-                        metar_data.visibility.m = match[1];
+                        metar_data.visibility.source = "m";
+                        metar_data.visibility.m = Number(match[1]);
                         metar_data.visibility.sm = metar_data.visibility.m == 9999 ? 10 : meters2miles(metar_data.visibility.m);
                     }
                     mode = 4;
@@ -333,6 +358,9 @@ search(prefixes, (query, callback) => {
                     // metar_callback.metarString = "EDDB 211420Z AUTO 10001KT 060V140 9000 OVC006 BKN016 SCT026 FEW050 07/06 Q1018 NOSIG";
                     // metar_callback.metarString = "EDDB 211420Z AUTO VRB21KT 9000 OVC006 BKN016 SCT026 FEW050 07/06 Q1018 NOSIG";
                     // metar_callback.metarString = "EDDB 211420Z AUTO 10021KT 9000 CAVOK 07/06 Q1018 NOSIG";
+                    // metar_callback.metarString = "ENDU 220920Z VRB01KT 9999 1800W BCFG FEW001 SCT004 BKN045 M01/M01 Q1026 TEMPO 1200 PRFG BKN004 RMK WIND 1374FT 24003KT WIND 2165FT 27008KT";
+                    metar_callback.metarString = "KLAX 220853Z 00000KT 6SM BR FEW003 FEW008 SCT250 13/13 A3004 RMK AO2 SLP172 T01330128 57006 $";
+                    xmetar_result.subtext = '';
                     if (airports[0].icao != metar_callback.icao) {
                         xmetar_result.subtext = '<p>No METAR for <i>' + icao + '</i> using <i>' + metar_callback.icao + '</i></p>';
                     }
@@ -344,7 +372,6 @@ search(prefixes, (query, callback) => {
 
                     metar = parse_metar(metar_callback.metarString);
                     console.log('Parsed METAR: ' + JSON.stringify(metar));
-
                     this.metar_line.innerHTML = metar_callback.metarString;
                     
                     try {
@@ -375,15 +402,16 @@ style(() => {
     if (this.host_el) {
         if (this.widgetStore.active) {
             this.host_el.classList.add('visible');
-            // console.log('show');
         }
         else {
             this.host_el.classList.remove('visible');
-            // console.log('hide');
         }
     }
     return this.widgetStore.active ? 'active' : null;
 })
+
+// Constants for Canvas
+const font_size = 13;
 
 // Drawing functions
 const cloudCounts = {
@@ -392,7 +420,6 @@ const cloudCounts = {
   BKN: 7,
   OVC: 10,
 };
-
 
 function drawCloudLayer(ctx, x, yBottom, width, rowH, layer) {
     const count = cloudCounts[layer.code] || 3;
@@ -607,7 +634,7 @@ function drawArrow(ctx, x, y, angle, length, color = "red") {
 function drawWindSpeed(ctx, cx, cy, angleRad, arrowLength, speed, color = "red") {
     if (speed == null) return;
 
-    const offset = 12; // distance beyond arrow tip
+    const offset = 20; // distance beyond arrow tip
 
     const tx = cx + Math.cos(angleRad) * (arrowLength + offset);
     const ty = cy + Math.sin(angleRad) * (arrowLength + offset);
@@ -624,17 +651,20 @@ function drawWindSpeed(ctx, cx, cy, angleRad, arrowLength, speed, color = "red")
 
 function drawWind(ctx, cx, cy, r, wind, length = 40) {
     let color = "red", fillColor = "rgba(255,90,90,0.25)";
-    if (wind.speed <= 10) { color = "lime"; fillColor = "rgba(90,255,90,0.15)"; }
-    if (wind.speed > 10 && wind.speed <= 20) { color = "yellow"; fillColor = "rgba(255,255,90,0.25)"; }
-    if (wind.speed > 20 && wind.speed <= 30) { color = "darkOrange"; fillColor = "rgba(255,165,0,0.25)"; }
+
+    if (!isNaN(wind.speed)) {
+        if (wind.speed <= 10) { color = "lime"; fillColor = "rgba(90,255,90,0.15)"; }
+        if (wind.speed > 10 && wind.speed <= 20) { color = "yellow"; fillColor = "rgba(255,255,90,0.25)"; }
+        if (wind.speed > 20 && wind.speed <= 30) { color = "darkOrange"; fillColor = "rgba(255,165,0,0.25)"; }
+    }
     
-    if (wind.degrees === "VRB") {
+    if (wind.degrees === "VRB" || wind.speed == 0) {
         ctx.save();
         ctx.font = "bold 18px sans-serif";
         ctx.fillStyle = color;
         ctx.textAlign = "center";
         ctx.textBaseline = "middle";
-        ctx.fillText("VRB", cx, cy);
+        ctx.fillText(wind.speed == 0 ? "No Wind" : "VRB", cx, cy);
         ctx.restore();
         drawWindSpeed(ctx, cx, cy, degToRad(0), 10, wind.speed + "kt", color);
     } else {
@@ -649,11 +679,149 @@ function drawWind(ctx, cx, cy, r, wind, length = 40) {
             ctx.closePath();
             ctx.fillStyle = fillColor;
             ctx.fill();
-            console.log(`Drawing wind variation arc from ${wind.from} to ${wind.to}`);
+            debug_on && console.log(`Drawing wind variation arc from ${wind.from} to ${wind.to}`);
         }
         drawArrow(ctx, cx, cy, degToRad(wind.degrees), length, color);
         drawWindSpeed(ctx, cx, cy, degToRad(wind.degrees + 180), length, wind.speed + "kt", color);
     }
+}
+
+function formatVisibility(visibility) {
+    // visibility = {m: Number, sm: Number, source: String, sm_original: String};
+
+    if (!visibility) return null;
+
+    if (visibility.source == "m") {
+        if (visibility.m >= 9999) return "VIS >=10km";
+        return `VIS ${visibility.m}m`;
+    } else if (visibility.source == "SM") {
+        if (visibility.sm_original) {
+            return `VIS ${visibility.sm_original}SM`;
+        } else {
+            if (visibility.sm >= 10) return "VIS >=10SM";
+            return `VIS ${visibility.sm}SM`;
+        }
+    } else {
+        return "VIS ≥10km";
+    }
+}
+
+function drawVisibility(ctx, x, y, width, visibility) {
+    const text = formatVisibility(visibility);
+    if (!text) return;
+
+    ctx.save();
+    ctx.fillStyle = "#fff";
+    ctx.font = `${font_size}px sans-serif`;
+    ctx.textAlign = "left";
+    ctx.textBaseline = "top";
+
+    ctx.fillText(text, x, y);
+    ctx.restore();
+}
+
+function calcRelativeHumidity(tempC, dewpointC) {
+  const a = 17.625;
+  const b = 243.04;
+
+  const alphaT = (a * tempC) / (b + tempC);
+  const alphaTd = (a * dewpointC) / (b + dewpointC);
+
+  return Math.round(100 * Math.exp(alphaTd - alphaT));
+}
+
+function drawTempDewRh(ctx, x, y, width, temp) {
+    const rh = calcRelativeHumidity(temp.temp.c, temp.dew.c);
+
+    ctx.save();
+    ctx.fillStyle = "#fff";
+    ctx.font = `${font_size}px sans-serif`;
+    ctx.textAlign = "left";
+    ctx.textBaseline = "top";
+
+    let text = '';
+    if (this.widgetStore.tempInCelsius) {
+        text = `T/D ${Math.round(temp.temp.c)}C/${Math.round(temp.dew.c)}C  RH ${rh}%`;
+    } else {
+        text = `T/D ${Math.round(temp.temp.f)}F/${Math.round(temp.temp.f)}F  RH ${rh}%`;
+    }
+    ctx.fillText(text, x, y);
+
+    ctx.restore();
+}
+
+function drawQnhAltimeter(ctx, x, y, width, pressure) {
+    // pressure = {'hpa': Number, 'inhg': Number}
+    ctx.save();
+
+    ctx.fillStyle = "#fff";
+    ctx.font = `${font_size}px sans-serif`;
+    ctx.textAlign = "left";
+    ctx.textBaseline = "top";
+
+    let text = "";
+    if (this.widgetStore.qnhInHpa) {
+        text += `QNH ${Math.round(pressure.hpa)}`;
+    } else {
+        text += `QNH ${pressure.inhg.toFixed(2)}`
+    }
+
+    // if (altInHg != null) {
+    //     const altStr = `A${Math.round(altInHg * 100)}`;
+    //     text += text ? `  ${altStr}` : altStr;
+    // }
+
+    ctx.fillText(text, x, y);
+    ctx.restore();
+}
+
+function getFlightCategory(metar) {
+    const allowedCloudCodes = ['BKN', 'OVC'];
+    const first = (metar.clouds || []).find(cloud => allowedCloudCodes.includes(cloud.code)) || null;
+    const ceilingFt = first ? first.height : 99999;
+    const visibilitySm = metar.visibility ? metar.visibility.sm : 10;
+
+    if (ceilingFt < 500 || visibilitySm < 1) return "LIFR";
+    if (ceilingFt < 1000 || visibilitySm < 3) return "IFR";
+    if (ceilingFt < 3000 || visibilitySm < 5) return "MVFR";
+    return "VFR";
+}
+
+const flightCategoryColors = {
+    VFR: "#00c853",
+    MVFR: "#2979ff",
+    IFR: "#d50000",
+    LIFR: "#aa00ff"
+};
+
+function drawFlightCategoryBadge(ctx, x, y, category) {
+    const w = 48;
+    const h = 20;
+    const r = 6;
+
+    ctx.save();
+    ctx.fillStyle = flightCategoryColors[category] || "#777";
+
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.lineTo(x + w - r, y);
+    ctx.quadraticCurveTo(x + w, y, x + w, y + r);
+    ctx.lineTo(x + w, y + h - r);
+    ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+    ctx.lineTo(x + r, y + h);
+    ctx.quadraticCurveTo(x, y + h, x, y + h - r);
+    ctx.lineTo(x, y + r);
+    ctx.quadraticCurveTo(x, y, x + r, y);
+    ctx.closePath();
+    ctx.fill();
+
+    ctx.fillStyle = "#fff";
+    ctx.font = `bold ${font_size}px sans-serif`;
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText(category, x + w / 2, y + h / 2);
+
+    ctx.restore();
 }
 
 function doRender(airport, metar) {
@@ -678,6 +846,11 @@ function doRender(airport, metar) {
         }
         drawWind(this.ctx, cx, cy, radius, metar.wind, 50);
         drawCloudDiagram(this.ctx, 290, 180, 170, 150, metar.clouds);
+        drawTempDewRh.call(this, this.ctx, 290, 190, 170, metar.temp);
+        drawQnhAltimeter.call(this, this.ctx, 290, 210, 170, metar.press);
+        drawVisibility(this.ctx, 290, 230, 170, metar.visibility);
+        
+        drawFlightCategoryBadge(this.ctx, 440, 210, getFlightCategory(metar));
     }
     drawCompassRose(this.ctx, cx, cy, radius);
 }
@@ -685,7 +858,6 @@ function doRender(airport, metar) {
 html_created(el => {
     this.host_el = el.querySelector('#Ape42_xmetar');
     this.canvas = el.querySelector('#Ape42_xmetar_canvas');
-    // console.log(`canvas: ${this.canvas}`)
     this.metar_line = el.querySelector('#Ape42_xmetar_container');
 
     if (!this.canvas) {
@@ -697,6 +869,22 @@ html_created(el => {
         console.log('xMETAR: Canvas context not found');
         return;
     }
+
+    // HiDPI scaling
+    try {
+        const dpr = this.host_el.devicePixelRatio || 1;
+        const cssWidth = this.canvas.clientWidth || 500;
+        const cssHeight = this.canvas.clientHeight || 340;
+        this.canvas.width = Math.round(cssWidth * dpr);
+        this.canvas.height = Math.round(cssHeight * dpr);
+        this.canvas.style.width = cssWidth + 'px';
+        this.canvas.style.height = cssHeight + 'px';
+        this.ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+        console.log(`xMETAR: Set HiDPI scaling with DPR=${dpr}`);
+    } catch (e) {
+        console.error('xMETAR: Error setting HiDPI scaling: ' + e);
+    }
+
     console.log('xMETAR: Canvas context initialized');
     doRender.call(this, null, null);
 });
