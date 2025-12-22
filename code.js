@@ -24,6 +24,7 @@ this.canvasHeight = this.canvasSize * 0.85;
 // Persistent storage for widget settings
 this.widgetStore = {
     active: false,
+    isLiveWeather: true,
     tempInCelsius: true,
     qnhInHpa: true,
     copyMetarToClipboard: true,
@@ -83,6 +84,22 @@ settings_define({
             this.widgetStore.showWidgetAfterMetarFetch = value;
             this.$api.datastore.export(this.widgetStore);
         }
+    }
+});
+
+// Check for live Weather and add/remove class for metar bar in widget.
+loop_1hz(() => {
+    const weather = this.$api.weather.get_weather();
+    const live = weather.sPresetName == 'TT:MENU.WEATHERTYPE_0DYNAMIC';
+    if (live != this.widgetStore.isLiveWeather) {
+        if (this.metar_line) {
+            if (live) {
+                this.metar_line.classList.remove('no_live_weather');
+            } else {
+                this.metar_line.classList.add('no_live_weather');
+            }
+        }
+        this.widgetStore.isLiveWeather = live;
     }
 });
 
@@ -195,7 +212,6 @@ function parse_metar(metar) {
                     metar_data.visibility.sm = 10;
                     mode = 5; // no clouds & no conditions reported
                 } else if (match) {
-                    console.log(`xMETAR: visibility ${match}`);
                     if (match[3]) { // unit is SM
                         metar_data.visibility.source = "SM";
                         if (match[2]) { // visibility contains a fraction
@@ -205,7 +221,6 @@ function parse_metar(metar) {
                             var whole = Math.floor(match[1] / match[2]);
                             var part = match[1] % match[2];
                             metar_data.visibility.sm_original = "" + (whole == 0 ? "" : whole + " ") + part + "/" + match[2];
-                            console.log(`xMETAR: ${metar_data.visibility.sm_string}`);
                         } else { // visibility contains a whole number.
                             metar_data.visibility.sm = Number(match[1]);
                         }
@@ -360,22 +375,10 @@ search(prefixes, (query, callback) => {
                     // metar_callback.metarString = "ENDU 220920Z VRB01KT 9999 1800W BCFG FEW001 SCT004 BKN045 OVC5100 M01/M01 Q1026 TEMPO 1200 PRFG BKN004 RMK WIND 1374FT 24003KT WIND 2165FT 27008KT";
                     // metar_callback.metarString = "ENDU 220920Z VRB01KT 9999 1800W BCFG OVC5100 M01/M01 Q1026 TEMPO 1200 PRFG BKN004 RMK WIND 1374FT 24003KT WIND 2165FT 27008KT";
                     // metar_callback.metarString = "KLAX 220853Z 00000KT 6SM BR FEW003 FEW008 SCT250 13/13 A3004 RMK AO2 SLP172 T01330128 57006 $";
-                    metar_callback.metarString = "KLAX 221436Z 10006KT 1 3/4SM R25L/4500VP6000FT BCFG BR BKN270 11/10 A3001 RMK AO2 VIS SE-S 1 FG SCT000 T01060100 $"
+                    // metar_callback.metarString = "KLAX 221436Z 10006KT 1 3/4SM R25L/4500VP6000FT BCFG BR BKN270 11/10 A3001 RMK AO2 VIS SE-S 1 FG SCT000 T01060100 $"
 
                     // Check for live weather
-                    const weather = this.$api.weather.get_weather();
-                    const isLiveWeather = weather.sPresetName == 'TT:MENU.WEATHERTYPE_0DYNAMIC';
-                    if (isLiveWeather) {
-                        xmetar_result.subtext = '';
-                        if (this.metar_line) {
-                            this.metar_line.classList.remove('no_live_weather');
-                        }
-                    } else {
-                        xmetar_result.subtext = '<p>WARNING: Weather preset is active.</p>';
-                        if (this.metar_line) {
-                            this.metar_line.classList.add('no_live_weather');
-                        }
-                    }
+                    xmetar_result.subtext = this.widgetStore.isLiveWeather ? '' : '<p>WARNING: Weather preset is active.</p>';
                     
                     if (airports[0].icao != metar_callback.icao) {
                         xmetar_result.subtext = '<p>No METAR for <i>' + icao + '</i> using <i>' + metar_callback.icao + '</i></p>';
