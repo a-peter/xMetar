@@ -351,7 +351,7 @@ search(prefixes, (query, callback) => {
     }
     
     let icao = data[1].toUpperCase();
-    if (icao == '' || icao.length != 4) {
+    if (icao == '' || icao.length < 4) {
         xmetar_result.label = 'XMETAR ' + data[1];
         is_note = false;
         callback([xmetar_result]);
@@ -365,6 +365,16 @@ search(prefixes, (query, callback) => {
         execute: () => {
             console.log('Executing XMETAR for ' + icao);
             this.$api.airports.find_airport_by_icao(guid, icao, (airports) => {
+                if (!airports || airports.length == 0) {
+                    debug_on && console.log('No airport found for ICAO code ' + icao);
+                    xmetar_result.subtext = '<p>No airport found for ICAO code <i>' + icao + '</i></p>';
+                    xmetar_result.is_note = true;
+                    callback([xmetar_result]);
+                    return;
+                }
+                // console.log('Airport found: ' + JSON.stringify(airports[0]));
+                // console.log('Airport found: airportClass=' + JSON.stringify(airports[0].airportClass));
+
                 let lat = airports[0].lat;
                 let lon = airports[0].lon;
 
