@@ -626,13 +626,13 @@ function runwayLabelPositions(cx, cy, r, angleDeg) {
 }
 
 
-// ?: { "name": "gravel", "color": "#b5a27a"},
 const runwayColors = {
     0: { "name": "concrete", "color": "#9e9e9e"},
     1: { "name": "grass", "color": "#4f7f4f"},
     4: { "name": "asphalt", "color": "#4a4a4a"},
     5: { "name": "grass", "color": "#4f7f4f"},
     12: { "name": "dirt", "color": "#8b6b4f"},
+    14: { "name": "gravel", "color": "#b5a27a"},
     17: { "name": "bituminous", "color": "#5f6f7f"},
     34: { "name": "unknown", "color": "#777777"},
     255: { "name": "unknown", "color": "#777777"},
