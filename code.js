@@ -813,6 +813,16 @@ function drawVisibility(ctx, x, y, width, visibility) {
     ctx.restore();
 }
 
+function drawAirportId(ctx, x, y, width, airport) {
+    ctx.save();
+    ctx.fillStyle = "#e0e0ff";
+    ctx.font = `bold ${font_size}px sans-serif`;
+    ctx.textAlign = "left";
+    ctx.textBaseline = "top";
+    ctx.fillText(`${airport.icao} ${airport.name}`, x, y);
+    ctx.restore();
+}
+
 function calcRelativeHumidity(tempC, dewpointC) {
   const a = 17.625;
   const b = 243.04;
@@ -932,10 +942,14 @@ function doRender(airport, metar) {
             drawRunway(this.ctx, cx, cy, radius - 30, runway, airport.icao); //, runway.primaryName.replace(/[0-9]/g, ''));
         }
         drawWind(this.ctx, cx, cy, radius, metar.wind, 50);
-        drawCloudDiagram(this.ctx, 290, 180, 170, 150, metar.clouds);
-        drawTempDewRh.call(this, this.ctx, 290, 190, 170, metar.temp);
-        drawQnhAltimeter.call(this, this.ctx, 290, 210, 170, metar.press);
-        drawVisibility(this.ctx, 290, 230, 170, metar.visibility);
+
+        drawCloudDiagram(this.ctx, 290, 175, 170, 150, metar.clouds);
+
+        const lineHeight = 17, start = 183;
+        drawTempDewRh.call(this, this.ctx, 290, start, 170, metar.temp);
+        drawQnhAltimeter.call(this, this.ctx, 290, start + lineHeight, 170, metar.press);
+        drawVisibility(this.ctx, 290, start + 2 * lineHeight, 170, metar.visibility);
+        drawAirportId(this.ctx, 290, start + 3 * lineHeight, 170, airport);
         
         drawFlightCategoryBadge(this.ctx, 440, 210, getFlightCategory(metar));
     }
