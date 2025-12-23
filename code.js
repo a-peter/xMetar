@@ -255,7 +255,9 @@ function parse_metar(metar) {
                 // Clouds
                 match = metar_parts[i].match(/^(FEW|SCT|BKN|OVC)(\d+)?/);
                 if (match) {
-                    metar_data.clouds.push({'code': match[1], 'height': match[2] ? Number(match[2]) * 100 : null});
+                    if (!isNaN(match[2])) {
+                        metar_data.clouds.push({'code': match[1], 'height': match[2] ? Number(match[2]) * 100 : null});
+                    }
                     // may occur multiple times
                 }
                 break;
@@ -664,7 +666,7 @@ function drawRunway(ctx, cx, cy, r, runway, icao) {
     const ny = dx;
 
     // Offset magnitude
-    const lateralOffset = runwayLateralOffset(suffix1, 20, icao);
+    const lateralOffset = runwayLateralOffset(suffix1, 25, icao);
 
     // Offset centerline
     const ox = cx + nx * lateralOffset;
