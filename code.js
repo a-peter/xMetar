@@ -15,6 +15,7 @@ const prefixes = ['xmetar', 'xm'];
 
 // Wheel data
 this.icao = null;
+this.metar_icao = null;
 this.airport_name = null;
 
 // Widget elements
@@ -309,7 +310,7 @@ run(() => {
         this.widgetStore.active = false;
     } else {
         if (!this.icao) {
-            this.$api.command.open_search('xmetar ');
+            this.$api.command.open_search(); 
         } else {
             this.host_el.classList.add('visible');
             this.widgetStore.active = true;
@@ -387,9 +388,6 @@ search(prefixes, (query, callback) => {
                 let lon = airports[0].lon;
 
                 this.$api.weather.find_metar_from_coords(lat, lon, (metar_callback) => {
-                    this.icao = icao;
-                    this.airport_name = airports[0].name;
-
                     // console.log('METAR: ' + JSON.stringify(metar_callback));
                     // metar_callback.metarString = "EDDB 211420Z AUTO 10010KT 9000 OVC006 BKN016 SCT026 FEW050 07/06 Q1018 NOSIG";
                     // metar_callback.metarString = "EDDB 211420Z AUTO 10001KT 060V140 9000 OVC006 BKN016 SCT026 FEW050 07/06 Q1018 NOSIG";
@@ -399,23 +397,28 @@ search(prefixes, (query, callback) => {
                     // metar_callback.metarString = "ENDU 220920Z VRB01KT 9999 1800W BCFG OVC5100 M01/M01 Q1026 TEMPO 1200 PRFG BKN004 RMK WIND 1374FT 24003KT WIND 2165FT 27008KT";
                     // metar_callback.metarString = "KLAX 220853Z 00000KT 6SM BR FEW003 FEW008 SCT250 13/13 A3004 RMK AO2 SLP172 T01330128 57006 $";
                     // metar_callback.metarString = "KLAX 221436Z 10006KT 1 3/4SM R25L/4500VP6000FT BCFG BR BKN270 11/10 A3001 RMK AO2 VIS SE-S 1 FG SCT000 T01060100 $"
-
+                    
                     // Check for live weather
                     xmetar_result.subtext = this.widgetStore.isLiveWeather ? '' : '<p>WARNING: Weather preset is active.</p>';
                     
                     if (airports[0].icao != metar_callback.icao) {
                         xmetar_result.subtext = '<p>No METAR for <i>' + icao + '</i> using <i>' + metar_callback.icao + '</i></p>';
                     }
-                    xmetar_result.subtext += '<p>' + metar_callback.metarString + '</p>';
                     xmetar_result.is_note = true;
                     if (this.widgetStore.copyMetarToClipboard) {
                         this.$api.command.copy_text(metar_callback.metarString);
                     }
-
+                    
                     metar = parse_metar(metar_callback.metarString);
                     console.log('Parsed METAR: ' + JSON.stringify(metar));
                     this.metar_line.innerHTML = metar_callback.metarString;
                     
+                    this.icao = icao;
+                    this.metar_icao =  metar.icao;
+                    console.log('Setting this.metar_icao to ' + this.metar_icao);
+                    this.airport_name = airports[0].name;
+
+                    xmetar_result.subtext += '<p>' + metar_callback.metarString + '</p>';
                     try {
                         if (this.widgetStore.showWidgetAfterMetarFetch) {
                             this.widgetStore.active = true; // show widget
@@ -443,7 +446,11 @@ search(prefixes, (query, callback) => {
 // Executed when the tile in the wheel is hovered or selected
 // Shows the ICAO and airport name in the tile info area
 info(() => {
-    return this.icao ? `${this.icao}<br/>${this.airport_name}` : 'xMETAR';
+    if (!this.icao) { return "xMETAR"; }
+    result = this.icao;
+    if (this.icao != this.metar_icao) { result += `/${this.metar_icao}`; }
+    result += `<br/>${this.airport_name && this.airport_name.substring(0,20) + (this.airport_name.length > 20 ? '...' : '')}`;
+    return result;
 });
 
 style(() => { 
