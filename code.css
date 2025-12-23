@@ -1,7 +1,7 @@
 #Ape42_xmetar {
     display: none;
     position: absolute;
-    background-color: rgba(128, 128, 128, 0.15);
+    background-color: rgba(64, 64, 64, 0.5);
     overflow: hidden;
     pointer-events: all;
 }

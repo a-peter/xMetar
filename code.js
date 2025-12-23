@@ -1,4 +1,4 @@
-// Version 1.0
+// Version 1.2
 // Author: Ape42
 // Description: xMETAR widget for Flow Pro - displays METAR information for a given ICAO code including wind and cloud diagram.
 // Usage: Type "xmetar &lt;ICAO&gt;" in Flow Pro search to get METAR information for the given ICAO code.
@@ -351,7 +351,7 @@ search(prefixes, (query, callback) => {
     }
     
     let icao = data[1].toUpperCase();
-    if (icao == '' || icao.length < 4) {
+    if (icao == '' || icao.length < 3) {
         xmetar_result.label = 'XMETAR ' + data[1];
         is_note = false;
         callback([xmetar_result]);
@@ -626,13 +626,13 @@ function runwayLabelPositions(cx, cy, r, angleDeg) {
 }
 
 
-// ?: { "name": "gravel", "color": "#b5a27a"},
 const runwayColors = {
     0: { "name": "concrete", "color": "#9e9e9e"},
     1: { "name": "grass", "color": "#4f7f4f"},
     4: { "name": "asphalt", "color": "#4a4a4a"},
     5: { "name": "grass", "color": "#4f7f4f"},
     12: { "name": "dirt", "color": "#8b6b4f"},
+    14: { "name": "gravel", "color": "#b5a27a"},
     17: { "name": "bituminous", "color": "#5f6f7f"},
     34: { "name": "unknown", "color": "#777777"},
     255: { "name": "unknown", "color": "#777777"},
@@ -813,6 +813,16 @@ function drawVisibility(ctx, x, y, width, visibility) {
     ctx.restore();
 }
 
+function drawAirportId(ctx, x, y, width, airport) {
+    ctx.save();
+    ctx.fillStyle = "#e0e0ff";
+    ctx.font = `bold ${font_size}px sans-serif`;
+    ctx.textAlign = "left";
+    ctx.textBaseline = "top";
+    ctx.fillText(`${airport.icao} ${airport.name}`, x, y);
+    ctx.restore();
+}
+
 function calcRelativeHumidity(tempC, dewpointC) {
   const a = 17.625;
   const b = 243.04;
@@ -932,10 +942,14 @@ function doRender(airport, metar) {
             drawRunway(this.ctx, cx, cy, radius - 30, runway, airport.icao); //, runway.primaryName.replace(/[0-9]/g, ''));
         }
         drawWind(this.ctx, cx, cy, radius, metar.wind, 50);
-        drawCloudDiagram(this.ctx, 290, 180, 170, 150, metar.clouds);
-        drawTempDewRh.call(this, this.ctx, 290, 190, 170, metar.temp);
-        drawQnhAltimeter.call(this, this.ctx, 290, 210, 170, metar.press);
-        drawVisibility(this.ctx, 290, 230, 170, metar.visibility);
+
+        drawCloudDiagram(this.ctx, 290, 175, 170, 150, metar.clouds);
+
+        const lineHeight = 17, start = 183;
+        drawTempDewRh.call(this, this.ctx, 290, start, 170, metar.temp);
+        drawQnhAltimeter.call(this, this.ctx, 290, start + lineHeight, 170, metar.press);
+        drawVisibility(this.ctx, 290, start + 2 * lineHeight, 170, metar.visibility);
+        drawAirportId(this.ctx, 290, start + 3 * lineHeight, 170, airport);
         
         drawFlightCategoryBadge(this.ctx, 440, 210, getFlightCategory(metar));
     }
