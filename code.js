@@ -412,10 +412,10 @@ search(prefixes, (query, callback) => {
                     metar = parse_metar(metar_callback.metarString);
                     console.log('Parsed METAR: ' + JSON.stringify(metar));
                     this.metar_line.innerHTML = metar_callback.metarString;
-                    
+
+                    // Store current ICAO and airport name for info()
                     this.icao = icao;
                     this.metar_icao =  metar.icao;
-                    console.log('Setting this.metar_icao to ' + this.metar_icao);
                     this.airport_name = airports[0].name;
 
                     xmetar_result.subtext += '<p>' + metar_callback.metarString + '</p>';
