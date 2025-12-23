@@ -683,8 +683,8 @@ function mapSurfaceToColor(surface, icao) {
 
 function runwayLateralOffset(letter, spacing, icao) {
   switch (letter) {
-    case "L": return -spacing;
-    case "R": return  spacing;
+    case "L": return  spacing;
+    case "R": return -spacing;
     case "C": return  0;
     case "":  return  0;
     default:  
