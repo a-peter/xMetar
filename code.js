@@ -351,7 +351,7 @@ search(prefixes, (query, callback) => {
     }
     
     let icao = data[1].toUpperCase();
-    if (icao == '' || icao.length < 4) {
+    if (icao == '' || icao.length < 3) {
         xmetar_result.label = 'XMETAR ' + data[1];
         is_note = false;
         callback([xmetar_result]);
