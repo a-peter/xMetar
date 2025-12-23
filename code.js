@@ -13,6 +13,10 @@ let guid = 'df8f1874-245e-44b6-b017-0a69eeb5c231'
 let xmetar_result_uid = 'xmetar_result_uid';
 const prefixes = ['xmetar', 'xm'];
 
+// Wheel data
+this.icao = null;
+this.airport_name = null;
+
 // Widget elements
 this.host_el = null;
 this.canvas = null;
@@ -304,8 +308,12 @@ run(() => {
         this.host_el.classList.remove('visible');
         this.widgetStore.active = false;
     } else {
-        this.host_el.classList.add('visible');
-        this.widgetStore.active = true;
+        if (!this.icao) {
+            this.$api.command.open_search('xmetar ');
+        } else {
+            this.host_el.classList.add('visible');
+            this.widgetStore.active = true;
+        }
     }
 });
 
@@ -379,6 +387,9 @@ search(prefixes, (query, callback) => {
                 let lon = airports[0].lon;
 
                 this.$api.weather.find_metar_from_coords(lat, lon, (metar_callback) => {
+                    this.icao = icao;
+                    this.airport_name = airports[0].name;
+
                     // console.log('METAR: ' + JSON.stringify(metar_callback));
                     // metar_callback.metarString = "EDDB 211420Z AUTO 10010KT 9000 OVC006 BKN016 SCT026 FEW050 07/06 Q1018 NOSIG";
                     // metar_callback.metarString = "EDDB 211420Z AUTO 10001KT 060V140 9000 OVC006 BKN016 SCT026 FEW050 07/06 Q1018 NOSIG";
@@ -429,6 +440,12 @@ search(prefixes, (query, callback) => {
     return true;
 });
 
+// Executed when the tile in the wheel is hovered or selected
+// Shows the ICAO and airport name in the tile info area
+info(() => {
+    return this.icao ? `${this.icao}<br/>${this.airport_name}` : 'xMETAR';
+});
+
 style(() => { 
     if (this.host_el) {
         if (this.widgetStore.active) {
@@ -438,7 +455,15 @@ style(() => {
             this.host_el.classList.remove('visible');
         }
     }
-    return this.widgetStore.active ? 'active' : null;
+    if (this.widgetStore.active) {
+        return 'active';
+    } else {
+        if (this.icao) {
+            return 'armed';
+        } else {
+            return null;
+        }
+    }
 })
 
 // Constants for Canvas
