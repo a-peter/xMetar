@@ -1,4 +1,4 @@
-// Version 1.2
+// Version 1.3
 // Author: Ape42
 // Description: xMETAR widget for Flow Pro - displays METAR information for a given ICAO code including wind and cloud diagram.
 // Usage: Type "xmetar &lt;ICAO&gt;" in Flow Pro search to get METAR information for the given ICAO code.
@@ -12,6 +12,11 @@ let xmetar_result = null;
 let guid = 'df8f1874-245e-44b6-b017-0a69eeb5c231'
 let xmetar_result_uid = 'xmetar_result_uid';
 const prefixes = ['xmetar', 'xm'];
+
+// Wheel data
+this.icao = null;
+this.metar_icao = null;
+this.airport_name = null;
 
 // Widget elements
 this.host_el = null;
@@ -304,8 +309,12 @@ run(() => {
         this.host_el.classList.remove('visible');
         this.widgetStore.active = false;
     } else {
-        this.host_el.classList.add('visible');
-        this.widgetStore.active = true;
+        if (!this.icao) {
+            this.$api.command.open_search(); 
+        } else {
+            this.host_el.classList.add('visible');
+            this.widgetStore.active = true;
+        }
     }
 });
 
@@ -388,23 +397,28 @@ search(prefixes, (query, callback) => {
                     // metar_callback.metarString = "ENDU 220920Z VRB01KT 9999 1800W BCFG OVC5100 M01/M01 Q1026 TEMPO 1200 PRFG BKN004 RMK WIND 1374FT 24003KT WIND 2165FT 27008KT";
                     // metar_callback.metarString = "KLAX 220853Z 00000KT 6SM BR FEW003 FEW008 SCT250 13/13 A3004 RMK AO2 SLP172 T01330128 57006 $";
                     // metar_callback.metarString = "KLAX 221436Z 10006KT 1 3/4SM R25L/4500VP6000FT BCFG BR BKN270 11/10 A3001 RMK AO2 VIS SE-S 1 FG SCT000 T01060100 $"
-
+                    
                     // Check for live weather
                     xmetar_result.subtext = this.widgetStore.isLiveWeather ? '' : '<p>WARNING: Weather preset is active.</p>';
                     
                     if (airports[0].icao != metar_callback.icao) {
                         xmetar_result.subtext = '<p>No METAR for <i>' + icao + '</i> using <i>' + metar_callback.icao + '</i></p>';
                     }
-                    xmetar_result.subtext += '<p>' + metar_callback.metarString + '</p>';
                     xmetar_result.is_note = true;
                     if (this.widgetStore.copyMetarToClipboard) {
                         this.$api.command.copy_text(metar_callback.metarString);
                     }
-
+                    
                     metar = parse_metar(metar_callback.metarString);
                     console.log('Parsed METAR: ' + JSON.stringify(metar));
                     this.metar_line.innerHTML = metar_callback.metarString;
-                    
+
+                    // Store current ICAO and airport name for info()
+                    this.icao = icao;
+                    this.metar_icao =  metar.icao;
+                    this.airport_name = airports[0].name;
+
+                    xmetar_result.subtext += '<p>' + metar_callback.metarString + '</p>';
                     try {
                         if (this.widgetStore.showWidgetAfterMetarFetch) {
                             this.widgetStore.active = true; // show widget
@@ -429,6 +443,16 @@ search(prefixes, (query, callback) => {
     return true;
 });
 
+// Executed when the tile in the wheel is hovered or selected
+// Shows the ICAO and airport name in the tile info area
+info(() => {
+    if (!this.icao) { return "xMETAR"; }
+    result = this.icao;
+    if (this.icao != this.metar_icao) { result += `/${this.metar_icao}`; }
+    result += `<br/>${this.airport_name && this.airport_name.substring(0,20) + (this.airport_name.length > 20 ? '...' : '')}`;
+    return result;
+});
+
 style(() => { 
     if (this.host_el) {
         if (this.widgetStore.active) {
@@ -438,7 +462,15 @@ style(() => {
             this.host_el.classList.remove('visible');
         }
     }
-    return this.widgetStore.active ? 'active' : null;
+    if (this.widgetStore.active) {
+        return 'active';
+    } else {
+        if (this.icao) {
+            return 'armed';
+        } else {
+            return null;
+        }
+    }
 })
 
 // Constants for Canvas
@@ -651,8 +683,8 @@ function mapSurfaceToColor(surface, icao) {
 
 function runwayLateralOffset(letter, spacing, icao) {
   switch (letter) {
-    case "L": return -spacing;
-    case "R": return  spacing;
+    case "L": return  spacing;
+    case "R": return -spacing;
     case "C": return  0;
     case "":  return  0;
     default:  
