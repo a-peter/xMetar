@@ -363,7 +363,7 @@ function getMETAR(metar_callback, xmetar_result, callback) {
     this.metar_line.innerHTML = metar_callback.metarString;
     
     // Store current ICAO and airport name for info()
-    this.icao = this.airport ? this.airport.icao : 'Position';
+    this.icao = this.airport ? this.airport.icao : 'Pos.';
     this.airport_name = this.airport ? this.airport.name : '';
     this.metar_icao =  this.metar.icao;
 
