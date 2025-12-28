@@ -14,8 +14,10 @@ let xmetar_result_uid = 'xmetar_result_uid';
 const prefixes = ['xmetar', 'xm'];
 
 // Widget data
+const metar_mode = { airport: 0, position: 1 };
 this.airport = null;
 this.metar = null;
+this.mode = metar_mode.airport;
 
 // Wheel data
 this.icao = null;
@@ -394,7 +396,7 @@ search(prefixes, (query, callback) => {
     let xmetar_result_current_position = {
         uid: xmetar_result_uid + "_current_position",
         label: 'XMETAR .',
-        subtext: 'Get METAR closes to current aircraft position',
+        subtext: 'Get METAR close to current aircraft position',
         execute: null
     };
     let xmetar_result_show_hide = {
@@ -434,15 +436,24 @@ search(prefixes, (query, callback) => {
         xmetar_result_current_position = {
             uid: xmetar_result_uid,
             label: 'XMETAR .',
-            subtext: 'Get METAR closes to current aircraft position',
+            subtext: 'Get METAR close to current aircraft position',
             execute: () => {
+                this.mode = metar_mode.position;
                 const [lat, lon] = getAircraftPosition.call(this);
-                this.airport = null;
-                this.$api.weather.find_metar_from_coords(lat, lon, (metar_callback) => {
-                    // console.log('METAR from aircraft position: ' + JSON.stringify(metar_callback));
-                    getMETAR.call(this, metar_callback, xmetar_result, callback);
-                    return true;
-                });
+                // find nearest airports within 100km, limit 1
+                this.$api.airports.find_airports_by_coords(guid, lon, lat, 100000, 1,
+                    (callback_added) => {
+                        this.airport = callback_added[0];
+                        this.$api.weather.find_metar_from_coords(lat, lon, (metar_callback) => {
+                            // console.log('METAR from aircraft position: ' + JSON.stringify(metar_callback));
+                            getMETAR.call(this, metar_callback, xmetar_result_uid, callback);
+                            return true;
+                        });
+                    }, (callback_removed) => {
+                    }, (callback_failed) => {
+                        console.error('Failed from aircraft position: ' + JSON.stringify(callback_failed));
+                    },
+                    true);
             }
         }
         callback([xmetar_result_current_position]);
@@ -463,6 +474,7 @@ search(prefixes, (query, callback) => {
         subtext: 'Enter ICAO code to get METAR information',
         execute: () => {
             console.log('Executing XMETAR for ' + icao);
+            this.mode = metar_mode.airport;
             this.$api.airports.find_airport_by_icao(guid, icao, (airports) => {
                 if (!airports || airports.length == 0) {
                     debug_on && console.log('No airport found for ICAO code ' + icao);
@@ -898,8 +910,9 @@ function drawAirportId(ctx, x, y, width, airport) {
     ctx.font = `bold ${font_size}px sans-serif`;
     ctx.textAlign = "left";
     ctx.textBaseline = "top";
+
     if (airport) {
-        ctx.fillText(`${airport.icao} ${airport.name}`, x, y);
+        ctx.fillText(`${this.mode == metar_mode.position ? 'Near: ' : ''}${airport.icao} ${airport.name}`, x, y);
     } else {
         ctx.fillText('In Air', x, y);
     }
@@ -1033,7 +1046,7 @@ function doRender() {
         drawTempDewRh.call(this, this.ctx, 290, start, 170, this.metar.temp);
         drawQnhAltimeter.call(this, this.ctx, 290, start + lineHeight, 170, this.metar.press);
         drawVisibility(this.ctx, 290, start + 2 * lineHeight, 170, this.metar.visibility);
-        drawAirportId(this.ctx, 290, start + 3 * lineHeight, 170, this.airport);
+        drawAirportId.call(this, this.ctx, 290, start + 3 * lineHeight, 170, this.airport);
         
         drawFlightCategoryBadge(this.ctx, 440, 210, getFlightCategory(this.metar));
     }
