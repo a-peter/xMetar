@@ -1,4 +1,4 @@
-// Version 1.3
+// Version 1.4
 // Author: Ape42
 // Description: xMETAR widget for Flow Pro - displays METAR information for a given ICAO code including wind and cloud diagram.
 // Usage: Type "xmetar &lt;ICAO&gt;" in Flow Pro search to get METAR information for the given ICAO code.
@@ -12,6 +12,12 @@ let xmetar_result = null;
 let guid = 'df8f1874-245e-44b6-b017-0a69eeb5c231'
 let xmetar_result_uid = 'xmetar_result_uid';
 const prefixes = ['xmetar', 'xm'];
+
+// Widget data
+const metar_mode = { airport: 0, position: 1 };
+this.airport = null;
+this.metar = null;
+this.mode = metar_mode.airport;
 
 // Wheel data
 this.icao = null;
@@ -154,7 +160,7 @@ function parse_metar(metar) {
             mode = 3; // no wind reported, skipping to visibility
             // console.log('No wind reported');
         }
-        if (mode < 5 && metar_parts[i].match(/^(FEW|SCT|BKN|OVC)(\d+)?/)) {
+        if (mode < 5 && metar_parts[i].match(/^(FEW|SCT|BKN|OVC|VV)(\d+)?/)) {
             mode = 5; // no visibility or conditions reported, skipping to clouds
             // console.log('No visibility reported');
         }
@@ -258,9 +264,10 @@ function parse_metar(metar) {
                 break;
             case 5:
                 // Clouds
-                match = metar_parts[i].match(/^(FEW|SCT|BKN|OVC)(\d+)?/);
+                match = metar_parts[i].match(/^(FEW|SCT|BKN|OVC|VV)(\d+)?/);
                 if (match) {
                     if (!isNaN(match[2])) {
+                        console.log(`xMETAR: Cloud match: ${match[1]} at ${match[2]}00 ft`);
                         metar_data.clouds.push({'code': match[1], 'height': match[2] ? Number(match[2]) * 100 : null});
                     }
                     // may occur multiple times
@@ -318,12 +325,85 @@ run(() => {
     }
 });
 
+function rad2Deg(rad) {
+    return rad * (180 / Math.PI);
+}
+
+function getAircraftPosition() {
+    const longitude = this.$api.variables.get('A:PLANE LONGITUDE', 'Radians');
+    const latitude = this.$api.variables.get('A:PLANE LATITUDE', 'Radians');
+    return [rad2Deg(latitude), rad2Deg(longitude)];
+}
+
+function getMETAR(metar_raw, result, callback) {
+    // console.log('METAR: ' + JSON.stringify(metar_raw));
+    // Test METAR strings
+    // metar_raw.metarString = "EDDB 211420Z AUTO 10010KT 9000 OVC006 BKN016 SCT026 FEW050 07/06 Q1018 NOSIG";
+    // metar_raw.metarString = "EDDB 211420Z AUTO 10001KT 060V140 9000 OVC006 BKN016 SCT026 FEW050 07/06 Q1018 NOSIG";
+    // metar_raw.metarString = "EDDB 211420Z AUTO VRB21KT 9000 OVC006 BKN016 SCT026 FEW050 07/06 Q1018 NOSIG";
+    // metar_raw.metarString = "EDDB 211420Z AUTO 10021KT 9000 CAVOK 07/06 Q1018 NOSIG";
+    // metar_raw.metarString = "ENDU 220920Z VRB01KT 9999 1800W BCFG FEW001 SCT004 BKN045 OVC5100 M01/M01 Q1026 TEMPO 1200 PRFG BKN004 RMK WIND 1374FT 24003KT WIND 2165FT 27008KT";
+    // metar_raw.metarString = "ENDU 220920Z VRB01KT 9999 1800W BCFG OVC5100 M01/M01 Q1026 TEMPO 1200 PRFG BKN004 RMK WIND 1374FT 24003KT WIND 2165FT 27008KT";
+    // metar_raw.metarString = "KLAX 220853Z 00000KT 6SM BR FEW003 FEW008 SCT250 13/13 A3004 RMK AO2 SLP172 T01330128 57006 $";
+    // metar_raw.metarString = "KLAX 221436Z 10006KT 1 3/4SM R25L/4500VP6000FT BCFG BR BKN270 11/10 A3001 RMK AO2 VIS SE-S 1 FG SCT000 T01060100 $";
+    // metar_raw.metarString = "ETMN 281320Z 25006KT 0050 FZFG VV000 M00/M00 Q1030 RED"; // For VV testing
+    // metar_raw.metarString = "LOWS 281420Z 35004KT 0900 R15/1400D R33/1500U FZFG VV002 M03/M03 Q1028 TEMPO 0600 FZFG"; // For runway visual range testing:
+    
+    this.metar = parse_metar(metar_raw.metarString);
+    console.log('Parsed METAR: ' + JSON.stringify(this.metar));
+    // Check for live weather
+    result.subtext = this.widgetStore.isLiveWeather ? '' : '<p>WARNING: Weather preset is active.</p>';
+    
+    if (this.airport) {
+        if (this.mode == metar_mode.airport) {
+            result.subtext += '<p>No METAR for <i>' + this.airport.icao + '</i> using <i>' + metar_raw.icao + '</i></p>';
+        } else if (this.airport.icao != metar_raw.icao) {
+            result.subtext += '<p>METAR for current position using <i>' + metar_raw.icao + '</i></p>';
+        }
+    }
+    if (!this.airport) {
+        result.subtext = '<p>METAR for current position using <i>' + metar_raw.icao + '</i></p>';
+    }
+    result.is_note = true;
+    if (this.widgetStore.copyMetarToClipboard) {
+        this.$api.command.copy_text(metar_raw.metarString);
+    }
+    
+    this.metar_line.innerHTML = metar_raw.metarString;
+    
+    // Store current ICAO and airport name for info()
+    this.icao = this.airport ? this.airport.icao : 'Pos.';
+    this.airport_name = this.airport ? this.airport.name : '';
+    this.metar_icao =  this.metar.icao;
+
+    result.subtext += '<p>' + metar_raw.metarString + '</p>';
+    try {
+        if (this.widgetStore.showWidgetAfterMetarFetch) {
+            this.widgetStore.active = true; // show widget
+        }
+        doRender.call(this, this.metar);
+    } catch (e) {
+        console.error('xMETAR: Error during rendering: ' + e);
+    }
+
+    if (this.widgetStore.keepOpen) {
+        debug_on && console.log('xMETAR: Keeping widget open after search');
+        callback([result]);
+    }
+}
+
 // Main search function for Flow Pro
 search(prefixes, (query, callback) => {
     let xmetar_result = {
         uid: xmetar_result_uid,
         label: 'XMETAR &lt;ICAO&gt;',
         subtext: 'Enter ICAO code to get METAR information',
+        execute: null
+    };
+    let xmetar_result_current_position = {
+        uid: xmetar_result_uid + "_current_position",
+        label: 'XMETAR .',
+        subtext: 'Get METAR close to current aircraft position',
         execute: null
     };
     let xmetar_result_show_hide = {
@@ -341,7 +421,7 @@ search(prefixes, (query, callback) => {
     // test if query has sufficient parameters
     let data = query.toLowerCase().split(' ');
     if (data.length == 1 || !data[1] ) {
-        callback([xmetar_result, xmetar_result_show_hide]);
+        callback([xmetar_result, xmetar_result_current_position, xmetar_result_show_hide]);
         return;
     }
     
@@ -358,6 +438,34 @@ search(prefixes, (query, callback) => {
         callback([xmetar_result_show_hide]);
         return true;
     }
+
+    if (data[1] == '.') {
+        xmetar_result_current_position = {
+            uid: xmetar_result_uid,
+            label: 'XMETAR .',
+            subtext: 'Get METAR close to current aircraft position',
+            execute: () => {
+                this.mode = metar_mode.position;
+                const [lat, lon] = getAircraftPosition.call(this);
+                // find nearest airports within 100km, limit 1
+                this.$api.airports.find_airports_by_coords(guid, lon, lat, 100000, 1,
+                    (callback_added) => {
+                        this.airport = callback_added[0];
+                        this.$api.weather.find_metar_from_coords(lat, lon, (metar_callback) => {
+                            this.debug_on && console.log('METAR from aircraft position: ' + JSON.stringify(metar_callback));
+                            getMETAR.call(this, metar_callback, xmetar_result_current_position, callback);
+                            return true;
+                        });
+                    }, (callback_removed) => {
+                    }, (callback_failed) => {
+                        console.error('Failed from aircraft position: ' + JSON.stringify(callback_failed));
+                    },
+                    true);
+            }
+        }
+        callback([xmetar_result_current_position]);
+        return true;
+    }
     
     let icao = data[1].toUpperCase();
     if (icao == '' || icao.length < 3) {
@@ -370,9 +478,10 @@ search(prefixes, (query, callback) => {
     xmetar_result = {
         uid: xmetar_result_uid,
         label: 'XMETAR ' + data[1],
-        subtext: '',
+        subtext: 'Enter ICAO code to get METAR information',
         execute: () => {
             console.log('Executing XMETAR for ' + icao);
+            this.mode = metar_mode.airport;
             this.$api.airports.find_airport_by_icao(guid, icao, (airports) => {
                 if (!airports || airports.length == 0) {
                     debug_on && console.log('No airport found for ICAO code ' + icao);
@@ -383,55 +492,11 @@ search(prefixes, (query, callback) => {
                 }
                 // console.log('Airport found: ' + JSON.stringify(airports[0]));
                 // console.log('Airport found: airportClass=' + JSON.stringify(airports[0].airportClass));
+                console.log('Airport found: ' + airports[0].lat + ' - ' + airports[0].lon);
 
-                let lat = airports[0].lat;
-                let lon = airports[0].lon;
-
-                this.$api.weather.find_metar_from_coords(lat, lon, (metar_callback) => {
-                    // console.log('METAR: ' + JSON.stringify(metar_callback));
-                    // metar_callback.metarString = "EDDB 211420Z AUTO 10010KT 9000 OVC006 BKN016 SCT026 FEW050 07/06 Q1018 NOSIG";
-                    // metar_callback.metarString = "EDDB 211420Z AUTO 10001KT 060V140 9000 OVC006 BKN016 SCT026 FEW050 07/06 Q1018 NOSIG";
-                    // metar_callback.metarString = "EDDB 211420Z AUTO VRB21KT 9000 OVC006 BKN016 SCT026 FEW050 07/06 Q1018 NOSIG";
-                    // metar_callback.metarString = "EDDB 211420Z AUTO 10021KT 9000 CAVOK 07/06 Q1018 NOSIG";
-                    // metar_callback.metarString = "ENDU 220920Z VRB01KT 9999 1800W BCFG FEW001 SCT004 BKN045 OVC5100 M01/M01 Q1026 TEMPO 1200 PRFG BKN004 RMK WIND 1374FT 24003KT WIND 2165FT 27008KT";
-                    // metar_callback.metarString = "ENDU 220920Z VRB01KT 9999 1800W BCFG OVC5100 M01/M01 Q1026 TEMPO 1200 PRFG BKN004 RMK WIND 1374FT 24003KT WIND 2165FT 27008KT";
-                    // metar_callback.metarString = "KLAX 220853Z 00000KT 6SM BR FEW003 FEW008 SCT250 13/13 A3004 RMK AO2 SLP172 T01330128 57006 $";
-                    // metar_callback.metarString = "KLAX 221436Z 10006KT 1 3/4SM R25L/4500VP6000FT BCFG BR BKN270 11/10 A3001 RMK AO2 VIS SE-S 1 FG SCT000 T01060100 $"
-                    
-                    // Check for live weather
-                    xmetar_result.subtext = this.widgetStore.isLiveWeather ? '' : '<p>WARNING: Weather preset is active.</p>';
-                    
-                    if (airports[0].icao != metar_callback.icao) {
-                        xmetar_result.subtext = '<p>No METAR for <i>' + icao + '</i> using <i>' + metar_callback.icao + '</i></p>';
-                    }
-                    xmetar_result.is_note = true;
-                    if (this.widgetStore.copyMetarToClipboard) {
-                        this.$api.command.copy_text(metar_callback.metarString);
-                    }
-                    
-                    metar = parse_metar(metar_callback.metarString);
-                    console.log('Parsed METAR: ' + JSON.stringify(metar));
-                    this.metar_line.innerHTML = metar_callback.metarString;
-
-                    // Store current ICAO and airport name for info()
-                    this.icao = icao;
-                    this.metar_icao =  metar.icao;
-                    this.airport_name = airports[0].name;
-
-                    xmetar_result.subtext += '<p>' + metar_callback.metarString + '</p>';
-                    try {
-                        if (this.widgetStore.showWidgetAfterMetarFetch) {
-                            this.widgetStore.active = true; // show widget
-                        }
-                        doRender.call(this, airports[0], metar);
-                    } catch (e) {
-                        console.error('xMETAR: Error during rendering: ' + e);
-                    }
-
-                    if (this.widgetStore.keepOpen) {
-                        debug_on && console.log('xMETAR: Keeping widget open after search');
-                        callback([xmetar_result]);
-                    }
+                this.airport = airports[0];
+                this.$api.weather.find_metar_from_coords(this.airport.lat, this.airport.lon, (metar_callback) => {
+                    getMETAR.call(this, metar_callback, xmetar_result, callback);
                     return true;
                 })
             })
@@ -482,6 +547,7 @@ const cloudCounts = {
   SCT: 4,
   BKN: 7,
   OVC: 10,
+  VV: 20,
 };
 
 function drawCloudLayer(ctx, x, yBottom, width, rowH, layer) {
@@ -497,19 +563,31 @@ function drawCloudLayer(ctx, x, yBottom, width, rowH, layer) {
     ctx.save();
     ctx.fillStyle = "rgba(255,255,255,0.6)";
 
-    for (let i = 0; i < count; i++) {
-        const cx = x + spacing * i + spacing / 2;
-        const cy = yBase - radius; // bottom touches cloud base
-
+    if (layer.code === 'VV') {
+        ctx.save();
+        ctx.strokeStyle = "rgba(255, 64, 64, 0.6)";
+        ctx.lineWidth = 2;
+        ctx.setLineDash([5, 3]);
         ctx.beginPath();
-        ctx.arc(cx, cy, radius, 0, Math.PI * 2);
-        ctx.fill();
+        ctx.moveTo(x, yBase);
+        ctx.lineTo(x + width, yBase);
+        ctx.stroke();
+        ctx.restore();
+    } else {
+        for (let i = 0; i < count; i++) {
+            const cx = x + spacing * i + spacing / 2;
+            const cy = yBase - radius; // bottom touches cloud base
+
+            ctx.beginPath();
+            ctx.arc(cx, cy, radius, 0, Math.PI * 2);
+            ctx.fill();
+        }
     }
     ctx.fillStyle = "#fff";
     ctx.font = "bold 12px sans-serif";
     ctx.textAlign = "left";
     ctx.textBaseline = "middle";
-    ctx.fillText(layer.code, x + width + 6, yBase - radius);
+    ctx.fillText(layer.code, x + width + 6, yBase - (layer.code === 'VV' ? 0 : radius));
 
     ctx.restore();
 }
@@ -851,7 +929,12 @@ function drawAirportId(ctx, x, y, width, airport) {
     ctx.font = `bold ${font_size}px sans-serif`;
     ctx.textAlign = "left";
     ctx.textBaseline = "top";
-    ctx.fillText(`${airport.icao} ${airport.name}`, x, y);
+
+    if (airport) {
+        ctx.fillText(`${this.mode == metar_mode.position ? 'Near: ' : ''}${airport.icao} ${airport.name}`, x, y);
+    } else {
+        ctx.fillText('In Air', x, y);
+    }
     ctx.restore();
 }
 
@@ -954,7 +1037,7 @@ function drawFlightCategoryBadge(ctx, x, y, category) {
     ctx.restore();
 }
 
-function doRender(airport, metar) {
+function doRender() {
     if (!this.ctx) {
         console.error('xMETAR: No canvas context for rendering');
         return;
@@ -968,22 +1051,23 @@ function doRender(airport, metar) {
     const cy = radius + 10;
     
     drawCircle(this.ctx, cx, cy, radius, '#004000');
-    if (airport && metar) {
-        // console.log(`Airport runways: ${JSON.stringify(airport.runways)}`);
-        for (const runway of airport.runways) {
-            drawRunway(this.ctx, cx, cy, radius - 30, runway, airport.icao); //, runway.primaryName.replace(/[0-9]/g, ''));
+    if (this.metar) {
+        if (this.airport) {
+            for (const runway of this.airport.runways) {
+                drawRunway(this.ctx, cx, cy, radius - 30, runway, this.airport.icao);
+            }
         }
-        drawWind(this.ctx, cx, cy, radius, metar.wind, 50);
-
-        drawCloudDiagram(this.ctx, 290, 175, 170, 150, metar.clouds);
-
-        const lineHeight = 17, start = 183;
-        drawTempDewRh.call(this, this.ctx, 290, start, 170, metar.temp);
-        drawQnhAltimeter.call(this, this.ctx, 290, start + lineHeight, 170, metar.press);
-        drawVisibility(this.ctx, 290, start + 2 * lineHeight, 170, metar.visibility);
-        drawAirportId(this.ctx, 290, start + 3 * lineHeight, 170, airport);
+        drawWind(this.ctx, cx, cy, radius, this.metar.wind, 50);
         
-        drawFlightCategoryBadge(this.ctx, 440, 210, getFlightCategory(metar));
+        drawCloudDiagram(this.ctx, 290, 175, 170, 150, this.metar.clouds);
+        
+        const lineHeight = 17, start = 183;
+        drawTempDewRh.call(this, this.ctx, 290, start, 170, this.metar.temp);
+        drawQnhAltimeter.call(this, this.ctx, 290, start + lineHeight, 170, this.metar.press);
+        drawVisibility(this.ctx, 290, start + 2 * lineHeight, 170, this.metar.visibility);
+        drawAirportId.call(this, this.ctx, 290, start + 3 * lineHeight, 170, this.airport);
+        
+        drawFlightCategoryBadge(this.ctx, 440, 210, getFlightCategory(this.metar));
     }
     drawCompassRose(this.ctx, cx, cy, radius);
 }
@@ -1019,5 +1103,5 @@ html_created(el => {
     }
 
     debug_on && console.log('xMETAR: Canvas context initialized');
-    doRender.call(this, null, null);
+    doRender.call(this);
 });
