@@ -160,7 +160,7 @@ function parse_metar(metar) {
             mode = 3; // no wind reported, skipping to visibility
             // console.log('No wind reported');
         }
-        if (mode < 5 && metar_parts[i].match(/^(FEW|SCT|BKN|OVC)(\d+)?/)) {
+        if (mode < 5 && metar_parts[i].match(/^(FEW|SCT|BKN|OVC|VV)(\d+)?/)) {
             mode = 5; // no visibility or conditions reported, skipping to clouds
             // console.log('No visibility reported');
         }
@@ -264,9 +264,10 @@ function parse_metar(metar) {
                 break;
             case 5:
                 // Clouds
-                match = metar_parts[i].match(/^(FEW|SCT|BKN|OVC)(\d+)?/);
+                match = metar_parts[i].match(/^(FEW|SCT|BKN|OVC|VV)(\d+)?/);
                 if (match) {
                     if (!isNaN(match[2])) {
+                        console.log(`xMETAR: Cloud match: ${match[1]} at ${match[2]}00 ft`);
                         metar_data.clouds.push({'code': match[1], 'height': match[2] ? Number(match[2]) * 100 : null});
                     }
                     // may occur multiple times
@@ -345,6 +346,7 @@ function getMETAR(metar_raw, result, callback) {
     // metar_raw.metarString = "ENDU 220920Z VRB01KT 9999 1800W BCFG OVC5100 M01/M01 Q1026 TEMPO 1200 PRFG BKN004 RMK WIND 1374FT 24003KT WIND 2165FT 27008KT";
     // metar_raw.metarString = "KLAX 220853Z 00000KT 6SM BR FEW003 FEW008 SCT250 13/13 A3004 RMK AO2 SLP172 T01330128 57006 $";
     // metar_raw.metarString = "KLAX 221436Z 10006KT 1 3/4SM R25L/4500VP6000FT BCFG BR BKN270 11/10 A3001 RMK AO2 VIS SE-S 1 FG SCT000 T01060100 $"
+    // metar_raw.metarString = "ETMN 281320Z 25006KT 0050 FZFG VV000 M00/M00 Q1030 RED"
     
     this.metar = parse_metar(metar_raw.metarString);
     console.log('Parsed METAR: ' + JSON.stringify(this.metar));
@@ -544,6 +546,7 @@ const cloudCounts = {
   SCT: 4,
   BKN: 7,
   OVC: 10,
+  VV: 20,
 };
 
 function drawCloudLayer(ctx, x, yBottom, width, rowH, layer) {
@@ -559,19 +562,31 @@ function drawCloudLayer(ctx, x, yBottom, width, rowH, layer) {
     ctx.save();
     ctx.fillStyle = "rgba(255,255,255,0.6)";
 
-    for (let i = 0; i < count; i++) {
-        const cx = x + spacing * i + spacing / 2;
-        const cy = yBase - radius; // bottom touches cloud base
-
+    if (layer.code === 'VV') {
+        ctx.save();
+        ctx.strokeStyle = "rgba(255, 64, 64, 0.6)";
+        ctx.lineWidth = 2;
+        ctx.setLineDash([5, 3]);
         ctx.beginPath();
-        ctx.arc(cx, cy, radius, 0, Math.PI * 2);
-        ctx.fill();
+        ctx.moveTo(x, yBase);
+        ctx.lineTo(x + width, yBase);
+        ctx.stroke();
+        ctx.restore();
+    } else {
+        for (let i = 0; i < count; i++) {
+            const cx = x + spacing * i + spacing / 2;
+            const cy = yBase - radius; // bottom touches cloud base
+
+            ctx.beginPath();
+            ctx.arc(cx, cy, radius, 0, Math.PI * 2);
+            ctx.fill();
+        }
     }
     ctx.fillStyle = "#fff";
     ctx.font = "bold 12px sans-serif";
     ctx.textAlign = "left";
     ctx.textBaseline = "middle";
-    ctx.fillText(layer.code, x + width + 6, yBase - radius);
+    ctx.fillText(layer.code, x + width + 6, yBase - (layer.code === 'VV' ? 0 : radius));
 
     ctx.restore();
 }
