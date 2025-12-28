@@ -334,42 +334,46 @@ function getAircraftPosition() {
     return [rad2Deg(latitude), rad2Deg(longitude)];
 }
 
-function getMETAR(metar_callback, xmetar_result, callback) {
-    // console.log('METAR: ' + JSON.stringify(metar_callback));
+function getMETAR(metar_raw, result, callback) {
+    // console.log('METAR: ' + JSON.stringify(metar_raw));
     // Test METAR strings
-    // metar_callback.metarString = "EDDB 211420Z AUTO 10010KT 9000 OVC006 BKN016 SCT026 FEW050 07/06 Q1018 NOSIG";
-    // metar_callback.metarString = "EDDB 211420Z AUTO 10001KT 060V140 9000 OVC006 BKN016 SCT026 FEW050 07/06 Q1018 NOSIG";
-    // metar_callback.metarString = "EDDB 211420Z AUTO VRB21KT 9000 OVC006 BKN016 SCT026 FEW050 07/06 Q1018 NOSIG";
-    // metar_callback.metarString = "EDDB 211420Z AUTO 10021KT 9000 CAVOK 07/06 Q1018 NOSIG";
-    // metar_callback.metarString = "ENDU 220920Z VRB01KT 9999 1800W BCFG FEW001 SCT004 BKN045 OVC5100 M01/M01 Q1026 TEMPO 1200 PRFG BKN004 RMK WIND 1374FT 24003KT WIND 2165FT 27008KT";
-    // metar_callback.metarString = "ENDU 220920Z VRB01KT 9999 1800W BCFG OVC5100 M01/M01 Q1026 TEMPO 1200 PRFG BKN004 RMK WIND 1374FT 24003KT WIND 2165FT 27008KT";
-    // metar_callback.metarString = "KLAX 220853Z 00000KT 6SM BR FEW003 FEW008 SCT250 13/13 A3004 RMK AO2 SLP172 T01330128 57006 $";
-    // metar_callback.metarString = "KLAX 221436Z 10006KT 1 3/4SM R25L/4500VP6000FT BCFG BR BKN270 11/10 A3001 RMK AO2 VIS SE-S 1 FG SCT000 T01060100 $"
+    // metar_raw.metarString = "EDDB 211420Z AUTO 10010KT 9000 OVC006 BKN016 SCT026 FEW050 07/06 Q1018 NOSIG";
+    // metar_raw.metarString = "EDDB 211420Z AUTO 10001KT 060V140 9000 OVC006 BKN016 SCT026 FEW050 07/06 Q1018 NOSIG";
+    // metar_raw.metarString = "EDDB 211420Z AUTO VRB21KT 9000 OVC006 BKN016 SCT026 FEW050 07/06 Q1018 NOSIG";
+    // metar_raw.metarString = "EDDB 211420Z AUTO 10021KT 9000 CAVOK 07/06 Q1018 NOSIG";
+    // metar_raw.metarString = "ENDU 220920Z VRB01KT 9999 1800W BCFG FEW001 SCT004 BKN045 OVC5100 M01/M01 Q1026 TEMPO 1200 PRFG BKN004 RMK WIND 1374FT 24003KT WIND 2165FT 27008KT";
+    // metar_raw.metarString = "ENDU 220920Z VRB01KT 9999 1800W BCFG OVC5100 M01/M01 Q1026 TEMPO 1200 PRFG BKN004 RMK WIND 1374FT 24003KT WIND 2165FT 27008KT";
+    // metar_raw.metarString = "KLAX 220853Z 00000KT 6SM BR FEW003 FEW008 SCT250 13/13 A3004 RMK AO2 SLP172 T01330128 57006 $";
+    // metar_raw.metarString = "KLAX 221436Z 10006KT 1 3/4SM R25L/4500VP6000FT BCFG BR BKN270 11/10 A3001 RMK AO2 VIS SE-S 1 FG SCT000 T01060100 $"
     
-    this.metar = parse_metar(metar_callback.metarString);
+    this.metar = parse_metar(metar_raw.metarString);
     console.log('Parsed METAR: ' + JSON.stringify(this.metar));
     // Check for live weather
-    xmetar_result.subtext = this.widgetStore.isLiveWeather ? '' : '<p>WARNING: Weather preset is active.</p>';
+    result.subtext = this.widgetStore.isLiveWeather ? '' : '<p>WARNING: Weather preset is active.</p>';
     
-    if (this.airport && this.airport.icao != metar_callback.icao) {
-        xmetar_result.subtext = '<p>No METAR for <i>' + this.airport.icao + '</i> using <i>' + metar_callback.icao + '</i></p>';
+    if (this.airport) {
+        if (this.mode == metar_mode.airport) {
+            result.subtext += '<p>No METAR for <i>' + this.airport.icao + '</i> using <i>' + metar_raw.icao + '</i></p>';
+        } else if (this.airport.icao != metar_raw.icao) {
+            result.subtext += '<p>METAR for current position using <i>' + metar_raw.icao + '</i></p>';
+        }
     }
     if (!this.airport) {
-        xmetar_result.subtext = '<p>METAR for current position using <i>' + metar_callback.icao + '</i></p>';
+        result.subtext = '<p>METAR for current position using <i>' + metar_raw.icao + '</i></p>';
     }
-    xmetar_result.is_note = true;
+    result.is_note = true;
     if (this.widgetStore.copyMetarToClipboard) {
-        this.$api.command.copy_text(metar_callback.metarString);
+        this.$api.command.copy_text(metar_raw.metarString);
     }
     
-    this.metar_line.innerHTML = metar_callback.metarString;
+    this.metar_line.innerHTML = metar_raw.metarString;
     
     // Store current ICAO and airport name for info()
     this.icao = this.airport ? this.airport.icao : 'Pos.';
     this.airport_name = this.airport ? this.airport.name : '';
     this.metar_icao =  this.metar.icao;
 
-    xmetar_result.subtext += '<p>' + metar_callback.metarString + '</p>';
+    result.subtext += '<p>' + metar_raw.metarString + '</p>';
     try {
         if (this.widgetStore.showWidgetAfterMetarFetch) {
             this.widgetStore.active = true; // show widget
@@ -381,7 +385,7 @@ function getMETAR(metar_callback, xmetar_result, callback) {
 
     if (this.widgetStore.keepOpen) {
         debug_on && console.log('xMETAR: Keeping widget open after search');
-        callback([xmetar_result]);
+        callback([result]);
     }
 }
 
@@ -445,8 +449,8 @@ search(prefixes, (query, callback) => {
                     (callback_added) => {
                         this.airport = callback_added[0];
                         this.$api.weather.find_metar_from_coords(lat, lon, (metar_callback) => {
-                            // console.log('METAR from aircraft position: ' + JSON.stringify(metar_callback));
-                            getMETAR.call(this, metar_callback, xmetar_result_uid, callback);
+                            this.debug_on && console.log('METAR from aircraft position: ' + JSON.stringify(metar_callback));
+                            getMETAR.call(this, metar_callback, xmetar_result_current_position, callback);
                             return true;
                         });
                     }, (callback_removed) => {
@@ -489,7 +493,6 @@ search(prefixes, (query, callback) => {
 
                 this.airport = airports[0];
                 this.$api.weather.find_metar_from_coords(this.airport.lat, this.airport.lon, (metar_callback) => {
-                // this.$api.weather.find_metar_from_coords(48.39502167675761, 12.727827030707155, (metar_callback) => {
                     getMETAR.call(this, metar_callback, xmetar_result, callback);
                     return true;
                 })
