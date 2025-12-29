@@ -1,4 +1,4 @@
-// Version 1.4
+// Version 1.5
 // Author: Ape42
 // Description: xMETAR widget for Flow Pro - displays METAR information for a given ICAO code including wind and cloud diagram.
 // Usage: Type "xmetar &lt;ICAO&gt;" in Flow Pro search to get METAR information for the given ICAO code.
@@ -678,7 +678,7 @@ const cloudCounts = {
   VV: 20,
 };
 
-function drawCloudLayer(ctx, x, yBottom, width, rowH, layer) {
+function drawCloudLayer(x, yBottom, width, rowH, layer) {
     const count = cloudCounts[layer.code] || 3;
     const radius = 10; 
 
@@ -688,81 +688,81 @@ function drawCloudLayer(ctx, x, yBottom, width, rowH, layer) {
 
     const spacing = width / count;
 
-    ctx.save();
-    ctx.fillStyle = "rgba(255,255,255,0.6)";
+    this.ctx.save();
+    this.ctx.fillStyle = "rgba(255,255,255,0.6)";
 
     if (layer.code === 'VV') {
-        ctx.save();
-        ctx.strokeStyle = "rgba(255, 64, 64, 0.6)";
-        ctx.lineWidth = 2;
-        ctx.setLineDash([5, 3]);
-        ctx.beginPath();
-        ctx.moveTo(x, yBase);
-        ctx.lineTo(x + width, yBase);
-        ctx.stroke();
-        ctx.restore();
+        this.ctx.save();
+        this.ctx.strokeStyle = "rgba(255, 64, 64, 0.6)";
+        this.ctx.lineWidth = 2;
+        this.ctx.setLineDash([5, 3]);
+        this.ctx.beginPath();
+        this.ctx.moveTo(x, yBase);
+        this.ctx.lineTo(x + width, yBase);
+        this.ctx.stroke();
+        this.ctx.restore();
     } else {
         for (let i = 0; i < count; i++) {
             const cx = x + spacing * i + spacing / 2;
             const cy = yBase - radius; // bottom touches cloud base
 
-            ctx.beginPath();
-            ctx.arc(cx, cy, radius, 0, Math.PI * 2);
-            ctx.fill();
+            this.ctx.beginPath();
+            this.ctx.arc(cx, cy, radius, 0, Math.PI * 2);
+            this.ctx.fill();
         }
     }
-    ctx.fillStyle = "#fff";
-    ctx.font = "bold 12px sans-serif";
-    ctx.textAlign = "left";
-    ctx.textBaseline = "middle";
-    ctx.fillText(layer.code, x + width + 6, yBase - (layer.code === 'VV' ? 0 : radius));
+    this.ctx.fillStyle = "#fff";
+    this.ctx.font = "bold 12px sans-serif";
+    this.ctx.textAlign = "left";
+    this.ctx.textBaseline = "middle";
+    this.ctx.fillText(layer.code, x + width + 6, yBase - (layer.code === 'VV' ? 0 : radius));
 
-    ctx.restore();
+    this.ctx.restore();
 }
 
-function drawCloudDiagram(ctx, x, yBottom, width, height, clouds) {
+function drawCloudDiagram(x, yBottom, width, height, clouds) {
     const maxFt = 5000;
     const stepFt = 1000;
     const rows = maxFt / stepFt;
     const rowH = height / rows;
 
-    ctx.save();
+    this.ctx.save();
 
     // Grid + labels
-    ctx.strokeStyle = "#ccc";
-    ctx.lineWidth = 1;
-    ctx.font = "11px sans-serif";
-    ctx.fillStyle = "#000";
+    this.ctx.strokeStyle = "#ccc";
+    this.ctx.lineWidth = 1;
+    this.ctx.font = "11px sans-serif";
+    this.ctx.fillStyle = "#000";
 
     for (let i = 0; i <= rows; i++) {
         const y = yBottom - i * rowH;
-        ctx.beginPath();
-        ctx.moveTo(x, y);
-        ctx.lineTo(x + width, y);
-        ctx.stroke();
+        this.ctx.beginPath();
+        this.ctx.moveTo(x, y);
+        this.ctx.lineTo(x + width, y);
+        this.ctx.stroke();
 
-        ctx.fillText(`${i * stepFt}`, x - 30, y + 4);
+        this.ctx.fillText(`${i * stepFt}`, x - 30, y + 4);
     }
 
     // Draw clouds
-    ctx.fillStyle = "#fff";
-    ctx.font = "bold 14px sans-serif";
-    ctx.textAlign = "center";
-    ctx.textBaseline = "middle";
+    this.ctx.fillStyle = "#fff";
+    this.ctx.font = "bold 14px sans-serif";
+    this.ctx.textAlign = "center";
+    this.ctx.textBaseline = "middle";
     if (!clouds || clouds.length === 0) {
-        ctx.fillText("CAVOK / NSC", x + width / 2, yBottom - height / 2);
+        this.ctx.fillText("CAVOK / NSC", x + width / 2, yBottom - height / 2);
     } else {
         const filteredClouds = clouds.filter(layer => layer.height <= 5000);
         if (filteredClouds.length === 0) {
-            ctx.fillText("Clouds above 5000 ft", x + width / 2, yBottom - height - rowH / 2);
+            this.ctx.fillText("Clouds above 5000 ft", x + width / 2, yBottom - height - rowH / 2);
         } else {
             filteredClouds.forEach(layer => {
-                drawCloudLayer(ctx, x, yBottom, width, rowH, layer);
+                drawCloudLayer.call(this, x, yBottom, width, rowH, layer);
             });
         }
     }
 
-    ctx.restore();
+    this.ctx.restore();
 }
 
 function degToRad(deg) {
@@ -773,43 +773,38 @@ function degToCanvasRad(deg) {
     return deg * (Math.PI / 180);
 }
 
-function drawCircle(ctx, x, y, radius, color) {
-    ctx.beginPath();
-    ctx.arc(x, y, radius, 0, 2 * Math.PI, false);
+function drawCircle(x, y, radius, color) {
+    this.ctx.beginPath();
+    this.ctx.arc(x, y, radius, 0, 2 * Math.PI, false);
     lineWidth = 2;
-    // ctx.strokeStyle = color;
-    ctx.fillStyle = color;
-    ctx.fill();
+    // this.ctx.strokeStyle = color;
+    this.ctx.fillStyle = color;
+    this.ctx.fill();
 }
 
-function drawCompassLabel(ctx, cx, cy, r, deg) {
-  const labels = {
-    270: "N",
-    0: "E",
-    90: "S",
-    180: "W"
-  };
+function drawCompassLabel(cx, cy, r, deg) {
+    const labels = {270: "N", 0: "E", 90: "S", 180: "W" };
 
-  const a = degToCanvasRad(deg);
-  const inset = 18;
+    const a = degToCanvasRad(deg);
+    const inset = 18;
 
-  ctx.save();
-  ctx.font = "bold 12px sans-serif";
-  ctx.fillStyle = "#FFF";
-  ctx.textAlign = "center";
-  ctx.textBaseline = "middle";
+    this.ctx.save();
+    this.ctx.font = "bold 12px sans-serif";
+    this.ctx.fillStyle = "#FFF";
+    this.ctx.textAlign = "center";
+    this.ctx.textBaseline = "middle";
 
-  ctx.fillText(
-    labels[deg],
-    cx + Math.cos(a) * (r - inset),
-    cy + Math.sin(a) * (r - inset)
-  );
+    this.ctx.fillText(
+        labels[deg],
+        cx + Math.cos(a) * (r - inset),
+        cy + Math.sin(a) * (r - inset)
+    );
 
-  ctx.restore();
+    this.ctx.restore();
 }
 
-function drawCompassRose(ctx, cx, cy, r) {
-  ctx.save();
+function drawCompassRose(cx, cy, r) {
+  this.ctx.save();
 
   for (let deg = 0; deg < 360; deg += 10) {
     const a = degToCanvasRad(deg);
@@ -822,30 +817,30 @@ function drawCompassRose(ctx, cx, cy, r) {
     const x2 = cx + Math.cos(a) * (r - tickLen);
     const y2 = cy + Math.sin(a) * (r - tickLen);
 
-    ctx.beginPath();
-    ctx.moveTo(x1, y1);
-    ctx.lineTo(x2, y2);
-    ctx.lineWidth = isMajor ? 2 : 1;
-    ctx.strokeStyle = "#FFF";
-    ctx.stroke();
+    this.ctx.beginPath();
+    this.ctx.moveTo(x1, y1);
+    this.ctx.lineTo(x2, y2);
+    this.ctx.lineWidth = isMajor ? 2 : 1;
+    this.ctx.strokeStyle = "#FFF";
+    this.ctx.stroke();
 
     // Cardinal labels
     if (deg % 90 === 0) {
-      drawCompassLabel(ctx, cx, cy, r, deg);
+      drawCompassLabel.call(this, cx, cy, r, deg);
     }
   }
 
-  ctx.restore();
+  this.ctx.restore();
 }
 
-function drawRunwayText(ctx, x, y, text) {
-  ctx.save();
-  ctx.font = "bold 14px sans-serif";
-  ctx.fillStyle = "#FFF";
-  ctx.textAlign = "center";
-  ctx.textBaseline = "middle";
-  ctx.fillText(text, x, y);
-  ctx.restore();
+function drawRunwayText(x, y, text) {
+  this.ctx.save();
+  this.ctx.font = "bold 14px sans-serif";
+  this.ctx.fillStyle = "#FFF";
+  this.ctx.textAlign = "center";
+  this.ctx.textBaseline = "middle";
+  this.ctx.fillText(text, x, y);
+  this.ctx.restore();
 }
 
 function runwayLabelPositions(cx, cy, r, angleDeg) {
@@ -862,7 +857,6 @@ function runwayLabelPositions(cx, cy, r, angleDeg) {
     }
   ];
 }
-
 
 const runwayColors = {
     0: { "name": "concrete", "color": "#9e9e9e"},
@@ -899,7 +893,7 @@ function runwayLateralOffset(letter, spacing, icao) {
   }
 }
 
-function drawRunway(ctx, cx, cy, r, runway, icao) {
+function drawRunway(cx, cy, r, runway, icao) {
     const angleDeg = runway.direction;
     const a = degToRad(runway.direction);
     const suffix1 = runway.primaryName.replace(/[0-9]/g, '');
@@ -927,42 +921,42 @@ function drawRunway(ctx, cx, cy, r, runway, icao) {
     const y2 = oy - dy * r;
 
     // Draw runway
-    ctx.beginPath();
-    ctx.moveTo(x1, y1);
-    ctx.lineTo(x2, y2);
-    ctx.strokeStyle = mapSurfaceToColor(runway.surface, icao);
-    ctx.lineWidth = 10;
-    ctx.stroke();
+    this.ctx.beginPath();
+    this.ctx.moveTo(x1, y1);
+    this.ctx.lineTo(x2, y2);
+    this.ctx.strokeStyle = mapSurfaceToColor(runway.surface, icao);
+    this.ctx.lineWidth = 10;
+    this.ctx.stroke();
 
     // Draw runway designators without letters.
     const [p1, p2] = runwayLabelPositions(ox, oy, r, angleDeg);
     const designators = runway.designation.split('-');
-    drawRunwayText(ctx, p1.x, p1.y, designators[1].padStart(2, '0') + suffix1);
-    drawRunwayText(ctx, p2.x, p2.y, designators[0].padStart(2, '0') + suffix2);
+    drawRunwayText.call(this, p1.x, p1.y, designators[1].padStart(2, '0') + suffix1);
+    drawRunwayText.call(this, p2.x, p2.y, designators[0].padStart(2, '0') + suffix2);
 }
 
-function drawArrow(ctx, x, y, angle, length, color = "red") {
+function drawArrow(x, y, angle, length, color = "red") {
     const half = length / 2;
 
-    ctx.save();
-    ctx.translate(x, y);
-    ctx.rotate(angle);
+    this.ctx.save();
+    this.ctx.translate(x, y);
+    this.ctx.rotate(angle);
 
-    ctx.beginPath();
-    ctx.moveTo(-half, 0);
-    ctx.lineTo(half, 0);
-    ctx.moveTo(-half, 0);
-    ctx.lineTo(-half + 10, 6);
-    ctx.moveTo(-half, 0);
-    ctx.lineTo(-half + 10, -6);
+    this.ctx.beginPath();
+    this.ctx.moveTo(-half, 0);
+    this.ctx.lineTo(half, 0);
+    this.ctx.moveTo(-half, 0);
+    this.ctx.lineTo(-half + 10, 6);
+    this.ctx.moveTo(-half, 0);
+    this.ctx.lineTo(-half + 10, -6);
 
-    ctx.strokeStyle = color;
-    ctx.lineWidth = 2;
-    ctx.stroke();
-    ctx.restore();
+    this.ctx.strokeStyle = color;
+    this.ctx.lineWidth = 2;
+    this.ctx.stroke();
+    this.ctx.restore();
 }
 
-function drawWindSpeed(ctx, cx, cy, angleRad, arrowLength, speed, color = "red") {
+function drawWindSpeed(cx, cy, angleRad, arrowLength, speed, color = "red") {
     if (speed == null) return;
 
     const offset = -5; // distance beyond arrow tip
@@ -970,17 +964,17 @@ function drawWindSpeed(ctx, cx, cy, angleRad, arrowLength, speed, color = "red")
     const tx = cx + Math.cos(angleRad) * (arrowLength + offset);
     const ty = cy + Math.sin(angleRad) * (arrowLength + offset);
 
-    ctx.save();
-    ctx.font = "bold 13px sans-serif";
-    ctx.fillStyle = color;
-    ctx.textAlign = "center";
-    ctx.textBaseline = "middle";
+    this.ctx.save();
+    this.ctx.font = "bold 13px sans-serif";
+    this.ctx.fillStyle = color;
+    this.ctx.textAlign = "center";
+    this.ctx.textBaseline = "middle";
 
-    ctx.fillText(`${speed}`, tx, ty);
-    ctx.restore();
+    this.ctx.fillText(`${speed}`, tx, ty);
+    this.ctx.restore();
 }
 
-function drawWind(ctx, cx, cy, r, wind, length = 40) {
+function drawWind(cx, cy, r, wind, length = 40) {
     let color = "red", fillColor = "rgba(255,90,90,0.25)";
 
     if (!isNaN(wind.speed)) {
@@ -990,30 +984,30 @@ function drawWind(ctx, cx, cy, r, wind, length = 40) {
     }
     
     if (wind.degrees === "VRB" || wind.speed == 0) {
-        ctx.save();
-        ctx.font = "bold 18px sans-serif";
-        ctx.fillStyle = color;
-        ctx.textAlign = "center";
-        ctx.textBaseline = "middle";
-        ctx.fillText(wind.speed == 0 ? "No Wind" : "VRB", cx, cy);
-        ctx.restore();
-        drawWindSpeed(ctx, cx, cy - 15, degToRad(0), 10, wind.speed + "kt", color);
+        this.ctx.save();
+        this.ctx.font = "bold 18px sans-serif";
+        this.ctx.fillStyle = color;
+        this.ctx.textAlign = "center";
+        this.ctx.textBaseline = "middle";
+        this.ctx.fillText(wind.speed == 0 ? "No Wind" : "VRB", cx, cy);
+        this.ctx.restore();
+        drawWindSpeed.call(this, cx, cy - 15, degToRad(0), 10, wind.speed + "kt", color);
     } else {
         const a = degToRad(wind.degrees);
 
         if (wind.from && wind.to) {
             const startRad = degToRad(wind.from + 180);
             const endRad = degToRad(wind.to + 180);
-            ctx.beginPath();
-            ctx.moveTo(cx, cy);
-            ctx.arc(cx, cy, length + 5, startRad, endRad);
-            ctx.closePath();
-            ctx.fillStyle = fillColor;
-            ctx.fill();
+            this.ctx.beginPath();
+            this.ctx.moveTo(cx, cy);
+            this.ctx.arc(cx, cy, length + 5, startRad, endRad);
+            this.ctx.closePath();
+            this.ctx.fillStyle = fillColor;
+            this.ctx.fill();
             debug_on && console.log(`Drawing wind variation arc from ${wind.from} to ${wind.to}`);
         }
-        drawArrow(ctx, cx, cy, degToRad(wind.degrees), length, color);
-        drawWindSpeed(ctx, cx, cy, degToRad(wind.degrees + 180), length, wind.speed + "kt", color);
+        drawArrow.call(this, cx, cy, degToRad(wind.degrees), length, color);
+        drawWindSpeed.call(this, cx, cy, degToRad(wind.degrees + 180), length, wind.speed + "kt", color);
     }
 }
 
@@ -1037,33 +1031,33 @@ function formatVisibility(visibility) {
     }
 }
 
-function drawVisibility(ctx, x, y, width, visibility) {
+function drawVisibility(x, y, width, visibility) {
     const text = formatVisibility(visibility);
     if (!text) return;
 
-    ctx.save();
-    ctx.fillStyle = "#fff";
-    ctx.font = `${font_size}px sans-serif`;
-    ctx.textAlign = "left";
-    ctx.textBaseline = "top";
+    this.ctx.save();
+    this.ctx.fillStyle = "#fff";
+    this.ctx.font = `${font_size}px sans-serif`;
+    this.ctx.textAlign = "left";
+    this.ctx.textBaseline = "top";
 
-    ctx.fillText(text, x, y);
-    ctx.restore();
+    this.ctx.fillText(text, x, y);
+    this.ctx.restore();
 }
 
-function drawAirportId(ctx, x, y, width, airport) {
-    ctx.save();
-    ctx.fillStyle = "#e0e0ff";
-    ctx.font = `bold ${font_size}px sans-serif`;
-    ctx.textAlign = "left";
-    ctx.textBaseline = "top";
+function drawAirportId(x, y, width, airport) {
+    this.ctx.save();
+    this.ctx.fillStyle = "#e0e0ff";
+    this.ctx.font = `bold ${font_size}px sans-serif`;
+    this.ctx.textAlign = "left";
+    this.ctx.textBaseline = "top";
 
     if (airport) {
-        ctx.fillText(`${this.mode == metar_mode.position ? 'Near: ' : ''}${airport.icao} ${airport.name}`, x, y);
+        this.ctx.fillText(`${this.mode == metar_mode.position ? 'Near: ' : ''}${airport.icao} ${airport.name}`, x, y);
     } else {
-        ctx.fillText('In Air', x, y);
+        this.ctx.fillText('In Air', x, y);
     }
-    ctx.restore();
+    this.ctx.restore();
 }
 
 function calcRelativeHumidity(tempC, dewpointC) {
@@ -1076,14 +1070,14 @@ function calcRelativeHumidity(tempC, dewpointC) {
   return Math.round(100 * Math.exp(alphaTd - alphaT));
 }
 
-function drawTempDewRh(ctx, x, y, width, temp) {
+function drawTempDewRh(x, y, width, temp) {
     const rh = calcRelativeHumidity(temp.temp.c, temp.dew.c);
 
-    ctx.save();
-    ctx.fillStyle = "#fff";
-    ctx.font = `${font_size}px sans-serif`;
-    ctx.textAlign = "left";
-    ctx.textBaseline = "top";
+    this.ctx.save();
+    this.ctx.fillStyle = "#fff";
+    this.ctx.font = `${font_size}px sans-serif`;
+    this.ctx.textAlign = "left";
+    this.ctx.textBaseline = "top";
 
     let text = '';
     if (this.widgetStore.tempInCelsius) {
@@ -1091,19 +1085,19 @@ function drawTempDewRh(ctx, x, y, width, temp) {
     } else {
         text = `T/D ${Math.round(temp.temp.f)}F/${Math.round(temp.temp.f)}F  RH ${rh}%`;
     }
-    ctx.fillText(text, x, y);
+    this.ctx.fillText(text, x, y);
 
-    ctx.restore();
+    this.ctx.restore();
 }
 
-function drawQnhAltimeter(ctx, x, y, width, pressure) {
+function drawQnhAltimeter(x, y, width, pressure) {
     // pressure = {'hpa': Number, 'inhg': Number}
-    ctx.save();
+    this.ctx.save();
 
-    ctx.fillStyle = "#fff";
-    ctx.font = `${font_size}px sans-serif`;
-    ctx.textAlign = "left";
-    ctx.textBaseline = "top";
+    this.ctx.fillStyle = "#fff";
+    this.ctx.font = `${font_size}px sans-serif`;
+    this.ctx.textAlign = "left";
+    this.ctx.textBaseline = "top";
 
     let text = "";
     if (this.widgetStore.qnhInHpa) {
@@ -1112,8 +1106,8 @@ function drawQnhAltimeter(ctx, x, y, width, pressure) {
         text += `QNH ${pressure.inhg.toFixed(2)}`
     }
 
-    ctx.fillText(text, x, y);
-    ctx.restore();
+    this.ctx.fillText(text, x, y);
+    this.ctx.restore();
 }
 
 function getFlightCategory(metar) {
@@ -1135,34 +1129,34 @@ const flightCategoryColors = {
     LIFR: "#aa00ff"
 };
 
-function drawFlightCategoryBadge(ctx, x, y, category) {
+function drawFlightCategoryBadge(x, y, category) {
     const w = 48;
     const h = 20;
     const r = 6;
 
-    ctx.save();
-    ctx.fillStyle = flightCategoryColors[category] || "#777";
+    this.ctx.save();
+    this.ctx.fillStyle = flightCategoryColors[category] || "#777";
 
-    ctx.beginPath();
-    ctx.moveTo(x + r, y);
-    ctx.lineTo(x + w - r, y);
-    ctx.quadraticCurveTo(x + w, y, x + w, y + r);
-    ctx.lineTo(x + w, y + h - r);
-    ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
-    ctx.lineTo(x + r, y + h);
-    ctx.quadraticCurveTo(x, y + h, x, y + h - r);
-    ctx.lineTo(x, y + r);
-    ctx.quadraticCurveTo(x, y, x + r, y);
-    ctx.closePath();
-    ctx.fill();
+    this.ctx.beginPath();
+    this.ctx.moveTo(x + r, y);
+    this.ctx.lineTo(x + w - r, y);
+    this.ctx.quadraticCurveTo(x + w, y, x + w, y + r);
+    this.ctx.lineTo(x + w, y + h - r);
+    this.ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+    this.ctx.lineTo(x + r, y + h);
+    this.ctx.quadraticCurveTo(x, y + h, x, y + h - r);
+    this.ctx.lineTo(x, y + r);
+    this.ctx.quadraticCurveTo(x, y, x + r, y);
+    this.ctx.closePath();
+    this.ctx.fill();
 
-    ctx.fillStyle = "#fff";
-    ctx.font = `bold ${font_size}px sans-serif`;
-    ctx.textAlign = "center";
-    ctx.textBaseline = "middle";
-    ctx.fillText(category, x + w / 2, y + h / 2);
+    this.ctx.fillStyle = "#fff";
+    this.ctx.font = `bold ${font_size}px sans-serif`;
+    this.ctx.textAlign = "center";
+    this.ctx.textBaseline = "middle";
+    this.ctx.fillText(category, x + w / 2, y + h / 2);
 
-    ctx.restore();
+    this.ctx.restore();
 }
 
 function doRender() {
@@ -1178,26 +1172,26 @@ function doRender() {
     const cx = radius + 10;
     const cy = radius + 10;
     
-    drawCircle(this.ctx, cx, cy, radius, '#004000');
+    drawCircle.call(this, cx, cy, radius, '#004000'); // ok
     if (this.metar) {
         if (this.airport) {
             for (const runway of this.airport.runways) {
-                drawRunway(this.ctx, cx, cy, radius - 30, runway, this.airport.icao);
+                drawRunway.call(this, cx, cy, radius - 30, runway, this.airport.icao); // ok
             }
         }
-        drawWind(this.ctx, cx, cy, radius, this.metar.wind, 50);
+        drawWind.call(this, cx, cy, radius, this.metar.wind, 50); // ok
         
-        drawCloudDiagram(this.ctx, 290, 175, 170, 150, this.metar.clouds);
+        drawCloudDiagram.call(this, 290, 175, 170, 150, this.metar.clouds); // ok
         
         const lineHeight = 17, start = 183;
-        drawTempDewRh.call(this, this.ctx, 290, start, 170, this.metar.temp);
-        drawQnhAltimeter.call(this, this.ctx, 290, start + lineHeight, 170, this.metar.press);
-        drawVisibility(this.ctx, 290, start + 2 * lineHeight, 170, this.metar.visibility);
-        drawAirportId.call(this, this.ctx, 290, start + 3 * lineHeight, 170, this.airport);
+        drawTempDewRh.call(this, 290, start, 170, this.metar.temp); // ok
+        drawQnhAltimeter.call(this, 290, start + lineHeight, 170, this.metar.press); // ok
+        drawVisibility.call(this, 290, start + 2 * lineHeight, 170, this.metar.visibility); // ok
+        drawAirportId.call(this, 290, start + 3 * lineHeight, 170, this.airport); // ok
         
-        drawFlightCategoryBadge(this.ctx, 440, 210, getFlightCategory(this.metar));
+        drawFlightCategoryBadge.call(this, 440, 210, getFlightCategory(this.metar)); // ok
     }
-    drawCompassRose(this.ctx, cx, cy, radius);
+    drawCompassRose.call(this, cx, cy, radius);
 }
 
 html_created(el => {
