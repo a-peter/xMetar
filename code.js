@@ -347,6 +347,7 @@ function getMETAR(metar_raw, result, callback) {
     // metar_raw.metarString = "KLAX 220853Z 00000KT 6SM BR FEW003 FEW008 SCT250 13/13 A3004 RMK AO2 SLP172 T01330128 57006 $";
     // metar_raw.metarString = "KLAX 221436Z 10006KT 1 3/4SM R25L/4500VP6000FT BCFG BR BKN270 11/10 A3001 RMK AO2 VIS SE-S 1 FG SCT000 T01060100 $";
     // metar_raw.metarString = "ETMN 281320Z 25006KT 0050 FZFG VV000 M00/M00 Q1030 RED"; // For VV testing
+    // metar_raw.metarString = "EDWE 281420Z AUTO 24003KT 210V270 0600 R25/0800N FG VV/// 02/02 Q1031"; // For VV/// tesing
     // metar_raw.metarString = "LOWS 281420Z 35004KT 0900 R15/1400D R33/1500U FZFG VV002 M03/M03 Q1028 TEMPO 0600 FZFG"; // For runway visual range testing:
     
     this.metar = parse_metar(metar_raw.metarString);
@@ -392,6 +393,81 @@ function getMETAR(metar_raw, result, callback) {
     }
 }
 
+function getDistance(lat1, lon1, lat2, lon2) {
+
+    // Convert degrees to radians
+    function toRad(deg) {
+        return deg * Math.PI / 180;
+    }
+
+    lat1 = toRad(lat1);
+    lon1 = toRad(lon1);
+    lat2 = toRad(lat2);
+    lon2 = toRad(lon2);
+
+    var dLat = lat2 - lat1;
+    var dLon = lon2 - lon1;
+
+    var a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+            Math.cos(lat1) * Math.cos(lat2) *
+            Math.sin(dLon / 2) * Math.sin(dLon / 2);
+
+    var c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+
+    // Earth radii
+    var km = 6371.0088 * c;
+    var miles = 3958.7613 * c;
+    var nautical = 3440.065 * c;
+
+    return {
+        kilometers: km,
+        miles: miles,
+        nauticalMiles: nautical
+    };
+}
+
+function getBearing(lat1, lon1, lat2, lon2) {
+
+    function toRad(deg) {
+        return deg * Math.PI / 180;
+    }
+
+    function toDeg(rad) {
+        return rad * 180 / Math.PI;
+    }
+
+    lat1 = toRad(lat1);
+    lat2 = toRad(lat2);
+    lon1 = toRad(lon1);
+    lon2 = toRad(lon2);
+
+    var dLon = lon2 - lon1;
+
+    var y = Math.sin(dLon) * Math.cos(lat2);
+    var x = Math.cos(lat1) * Math.sin(lat2) -
+            Math.sin(lat1) * Math.cos(lat2) * Math.cos(dLon);
+
+    var brng = toDeg(Math.atan2(y, x));
+
+    // Normalize to 0–360
+    brng = (brng + 360) % 360;
+
+    return brng;
+}
+
+function bearingToCompass(bearing) {
+
+    var directions = [
+        "N", "NNE", "NE", "ENE",
+        "E", "ESE", "SE", "SSE",
+        "S", "SSW", "SW", "WSW",
+        "W", "WNW", "NW", "NNW"
+    ];
+
+    var index = Math.round(bearing / 22.5) % 16;
+    return directions[index];
+}
+
 // Main search function for Flow Pro
 search(prefixes, (query, callback) => {
     let xmetar_result = {
@@ -411,7 +487,13 @@ search(prefixes, (query, callback) => {
         label: 'xMETAR +|-|*',
         subtext: 'Shows, hides or toggles the xMETAR widget',
         execute: null
-    }
+    };
+    let xmetar_result_airports = {
+        uid: xmetar_result_uid + "_airports",
+        label: 'XMETAR ?',
+        subtext: 'List nearby airports with distance and bearing',
+        execute: null
+    };
     
     // test if any query is given
     if (!query) { 
@@ -436,6 +518,52 @@ search(prefixes, (query, callback) => {
             }
         }
         callback([xmetar_result_show_hide]);
+        return true;
+    }
+
+    if (data[1] == '?') {
+        console.log(1);
+        // const [lat, lon] = getAircraftPosition.call(this);
+        this.$api.airports.find_airports_by_coords(guid, ...getAircraftPosition.call(this).reverse(), 500000, 50,
+        (airports) => {
+            console.log(airports.length);
+            let results = [];
+            airports.filter(a => a.runways.length > 0).slice(0, 10).forEach((airport) => {
+                console.log(2);
+                let distance_m = getDistance(
+                    airport.lat, airport.lon,
+                    ...getAircraftPosition.call(this)
+                );
+                let bearing_deg = getBearing(
+                    ...getAircraftPosition.call(this),
+                    airport.lat, airport.lon
+                );
+                let longest_runway = airport.runways.reduce((max, runway) => runway.length > max.length ? runway : max);
+                // console.log('3 ' + JSON.stringify(longest_runway));
+                let bearing_compass = bearingToCompass(bearing_deg);
+                // console.log(distance_m, bearing_deg, bearing_compass);
+                results.push({
+                    uid: xmetar_result_uid + "_airport_" + airport.icao,
+                    label: airport.icao + ' (' + airport.name + ')',
+                    subtext: 'Distance: ' + Math.round(distance_m.nauticalMiles) + ' mi, Bearing: ' + Math.round(bearing_deg) + '°, Length: ' + Math.round(longest_runway.length) + ' ft (' + longest_runway.primaryName + '-' + longest_runway.secondaryName + ')',
+                    execute: () => {
+                        this.mode = metar_mode.airport;
+                        this.airport = airport;
+                        this.$api.weather.find_metar_from_coords(airport.lat, airport.lon, (metar_callback) => {
+                            this.debug_on && console.log('METAR from airport ' + airport.icao + ': ' + JSON.stringify(metar_callback));
+                            getMETAR.call(this, metar_callback, xmetar_result_airports, callback);
+                            return true;
+                        });
+                    }
+                });
+            });
+            callback(results);
+        }, (callback_removed) => {
+        }, (callback_failed) => {
+            console.error('Failed finding nearby airports: ' + JSON.stringify(callback_failed));
+        },
+        true);
+        callback([xmetar_result_airports]);
         return true;
     }
 
