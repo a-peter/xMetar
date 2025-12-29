@@ -508,16 +508,16 @@ search(prefixes, (query, callback) => {
         subtext: 'Get METAR close to current aircraft position',
         execute: null
     };
-    let xmetar_result_show_hide = {
-        uid: xmetar_result_uid + "_show_hide",
-        label: 'xMETAR +|-|*',
-        subtext: 'Shows, hides or toggles the xMETAR widget',
-        execute: null
-    };
     let xmetar_result_airports = {
         uid: xmetar_result_uid + "_airports",
         label: 'XMETAR ?',
         subtext: 'List nearby airports with distance and bearing',
+        execute: null
+    };
+    let xmetar_result_show_hide = {
+        uid: xmetar_result_uid + "_show_hide",
+        label: 'xMETAR +|-|*',
+        subtext: 'Shows, hides or toggles the xMETAR widget',
         execute: null
     };
     
@@ -529,7 +529,7 @@ search(prefixes, (query, callback) => {
     // test if query has sufficient parameters
     let data = query.toLowerCase().split(' ');
     if (data.length == 1 || !data[1] ) {
-        callback([xmetar_result, xmetar_result_current_position, xmetar_result_show_hide]);
+        callback([xmetar_result, xmetar_result_current_position, xmetar_result_airports, xmetar_result_show_hide]);
         return;
     }
     
