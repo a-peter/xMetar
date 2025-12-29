@@ -38,6 +38,8 @@ this.widgetStore = {
     isLiveWeather: true,
     tempInCelsius: true,
     qnhInHpa: true,
+    minRwyLengthFt: 0,
+    maxAirportCount: 10,
     copyMetarToClipboard: true,
     keepOpen: true,
     showWidgetAfterMetarFetch: true,
@@ -64,6 +66,30 @@ settings_define({
         changed: (value) => {
             this.widgetStore.qnhInHpa = value;
             this.$api.datastore.export(this.widgetStore);
+        }
+    },
+    minRwyLengthFt: {
+        label: 'Minimum Runway Length (ft)',
+        type: 'text',
+        description: 'Minimum length of runways to consider when listing nearby airports (in feet). Set to 0 to disable filtering. Accepts 0 to 5000 ft.',
+        value: this.widgetStore.minRwyLengthFt,
+        changed: (value) => {
+            // Clamp value between 0 and 5000
+            this.widgetStore.minRwyLengthFt = isNaN(parseInt(value)) ? 0 : Math.max(0, Math.min(parseInt(value, 10), 5000));
+            this.$api.datastore.export(this.widgetStore);
+            debug_on && console.log('Setting minRwyLengthFt to ' + this.widgetStore.minRwyLengthFt);
+        }
+    },
+    maxAirportCount: {
+        label: 'Maximum Airport Count',
+        type: 'text',
+        description: 'Maximum number of nearby airports to list when searching for nearby airports. Accepts 2 to 10.',
+        value: this.widgetStore.maxAirportCount,
+        changed: (value) => {
+            // Clamp value between 2 and 10
+            this.widgetStore.maxAirportCount = isNaN(parseInt(value)) ? 10 : Math.max(2, Math.min(parseInt(value, 10), 10));
+            this.$api.datastore.export(this.widgetStore);
+            debug_on && console.log('Setting maxAirportCount to ' + this.widgetStore.maxAirportCount);
         }
     },
     copyMetarToClipboard: {
@@ -516,16 +542,28 @@ search(prefixes, (query, callback) => {
             } else if (data[1] === '+') {
                 this.widgetStore.active = true;
             }
+            this.$api.datastore.export(this.widgetStore);
         }
         callback([xmetar_result_show_hide]);
         return true;
     }
 
     if (data[1] == '?') {
-        this.$api.airports.find_airports_by_coords(guid, ...getAircraftPosition.call(this).reverse(), 500000, 50,
+        this.$api.airports.find_airports_by_coords(guid, ...getAircraftPosition.call(this).reverse(), 1000000, 1000,
         (airports) => {
             let results = [];
-            airports.filter(a => a.runways.length > 0).slice(0, 10).forEach((airport) => {
+            console.log('Found ' + airports.length + ' nearby airports');
+            const filtered_airports =  airports
+                .filter(a => a.runways.length > 0)
+                .filter(a => a.runways.some(rwy => rwy.length >= this.widgetStore.minRwyLengthFt))
+                .slice(0, this.widgetStore.maxAirportCount);
+            if (filtered_airports.length == 0) {
+                xmetar_result_airports.subtext = '<p>No nearby airports found with runways longer than ' + this.widgetStore.minRwyLengthFt + ' ft.</p>';
+                results.push(xmetar_result_airports);
+                callback(results);
+                return;
+            }
+            filtered_airports.forEach((airport) => {
                 let distance_m = getDistance(
                     airport.lat, airport.lon,
                     ...getAircraftPosition.call(this)
