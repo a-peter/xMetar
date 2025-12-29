@@ -524,10 +524,8 @@ search(prefixes, (query, callback) => {
     if (data[1] == '?') {
         this.$api.airports.find_airports_by_coords(guid, ...getAircraftPosition.call(this).reverse(), 500000, 50,
         (airports) => {
-            console.log(airports.length);
             let results = [];
             airports.filter(a => a.runways.length > 0).slice(0, 10).forEach((airport) => {
-                console.log(2);
                 let distance_m = getDistance(
                     airport.lat, airport.lon,
                     ...getAircraftPosition.call(this)
@@ -540,9 +538,9 @@ search(prefixes, (query, callback) => {
                 let bearing_compass = bearingToCompass(bearing_deg);
                 // console.log(distance_m, bearing_deg, bearing_compass);
                 results.push({
-                    uid: xmetar_result_uid + "_airport_" + airport.icao,
+                    uid: xmetar_result_uid + '_airport_' + airport.icao,
                     label: airport.icao + ' (' + airport.name + ')',
-                    subtext: 'Distance: ' + Math.round(distance_m.nauticalMiles) + ' mi, Bearing: ' + Math.round(bearing_deg) + '° ' + bearing_compass + ', Dist.: ' + Math.round(longest_runway.length) + ' ft (' + longest_runway.primaryName + '-' + longest_runway.secondaryName + ')',
+                    subtext: 'Distance: ' + Math.round(distance_m.nauticalMiles) + ' mi, Bearing: ' + Math.round(bearing_deg) + '° ' + bearing_compass + ', RWY ' + longest_runway.primaryName + '-' + longest_runway.secondaryName + ': ' + Math.round(longest_runway.length) + ' ft',
                     execute: () => {
                         this.mode = metar_mode.airport;
                         this.airport = airport;
