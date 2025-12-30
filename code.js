@@ -1,4 +1,4 @@
-// Version 1.5
+// Version 1.6
 // Author: Ape42
 // Description: xMETAR widget for Flow Pro - displays METAR information for a given ICAO code including wind and cloud diagram.
 // Usage: Type "xmetar &lt;ICAO&gt;" in Flow Pro search to get METAR information for the given ICAO code.
@@ -376,13 +376,18 @@ function getMETAR(metar_raw, result, callback) {
     // metar_raw.metarString = "EDWE 281420Z AUTO 24003KT 210V270 0600 R25/0800N FG VV/// 02/02 Q1031"; // For VV/// tesing
     // metar_raw.metarString = "LOWS 281420Z 35004KT 0900 R15/1400D R33/1500U FZFG VV002 M03/M03 Q1028 TEMPO 0600 FZFG"; // For runway visual range testing:
     
+    // Testing colour codes
+    // metar_raw.metarString = "LOWS 281420Z 35004KT 0700 OVC002 M03/M03 Q1028 TEMPO 0600 FZFG"; // For runway visual range testing:
+    
+    
     this.metar = parse_metar(metar_raw.metarString);
     console.log('Parsed METAR: ' + JSON.stringify(this.metar));
     // Check for live weather
     result.subtext = this.widgetStore.isLiveWeather ? '' : '<p>WARNING: Weather preset is active.</p>';
     
     if (this.airport) {
-        if (this.mode == metar_mode.airport) {
+        console.log(`Requested ICAO: ${this.airport.icao}, METAR ICAO: ${metar_raw.icao}`);
+        if (this.mode == metar_mode.airport && this.airport.icao != metar_raw.icao) {
             result.subtext += '<p>No METAR for <i>' + this.airport.icao + '</i> using <i>' + metar_raw.icao + '</i></p>';
         } else if (this.airport.icao != metar_raw.icao) {
             result.subtext += '<p>METAR for current position using <i>' + metar_raw.icao + '</i></p>';
@@ -1060,7 +1065,7 @@ function formatVisibility(visibility) {
             return `VIS ${visibility.sm} SM`;
         }
     } else {
-        return "VIS ≥10km";
+        return "VIS >= 10km";
     }
 }
 
@@ -1143,24 +1148,51 @@ function drawQnhAltimeter(x, y, width, pressure) {
     this.ctx.restore();
 }
 
+const flightCategoryColors = {
+    VFR: ["#00c853", "#FFFFFF"],
+    MVFR: ["#2979ff", "#FFFFFF"],
+    IFR: ["#d50000", "#FFFFFF"],
+    LIFR: ["#aa00ff", "#FFFFFF"],
+};
+
 function getFlightCategory(metar) {
     const allowedCloudCodes = ['BKN', 'OVC'];
     const first = (metar.clouds || []).find(cloud => allowedCloudCodes.includes(cloud.code)) || null;
     const ceilingFt = first ? first.height : 99999;
     const visibilitySm = metar.visibility ? metar.visibility.sm : 10;
 
-    if (ceilingFt < 500 || visibilitySm < 1) return "LIFR";
-    if (ceilingFt < 1000 || visibilitySm < 3) return "IFR";
-    if (ceilingFt < 3000 || visibilitySm < 5) return "MVFR";
-    return "VFR";
+    if (ceilingFt < 500 || visibilitySm < 1) return ["LIFR", flightCategoryColors["LIFR"]];
+    if (ceilingFt < 1000 || visibilitySm < 3) return ["IFR", flightCategoryColors["IFR"]];
+    if (ceilingFt < 3000 || visibilitySm < 5) return ["MVFR", flightCategoryColors["MVFR"]];
+    return ["VFR", flightCategoryColors["VFR"]];
 }
 
-const flightCategoryColors = {
-    VFR: "#00c853",
-    MVFR: "#2979ff",
-    IFR: "#d50000",
-    LIFR: "#aa00ff"
+const colourStateColors = {
+    "BLU+": ["#0000ff", "#FFFFFF"],
+    "BLU": ["#2979ff", "#FFFFFF"],
+    "WHT": ["#ffffff", "#000000"],
+    "GRN": ["#00c853", "#FFFFFF"],
+    "YLO": ["#ffea00", "#000000"],
+    "AMB": ["#ff9100", "#000000"],
+    "RED": ["#d50000", "#FFFFFF"],
 };
+
+// See https://en.wikipedia.org/wiki/Colour_state
+function getColourState(metar) {
+    const allowedCloudCodes = ['BKN', 'OVC'];
+    const first = (metar.clouds || []).find(cloud => allowedCloudCodes.includes(cloud.code)) || null;
+    const ceilingFt = first ? first.height : 99999;
+    const visibilityMeter = metar.visibility ? metar.visibility.m : 10000;
+    
+    debug_on && console.log(`Ceiling: ${ceilingFt} ft, Visibility: ${visibilityMeter} m`);
+    if (ceilingFt >= 20000 && visibilityMeter >= 8000) return ["BLU+", colourStateColors["BLU+"]];
+    if (ceilingFt >= 2500 && visibilityMeter >= 8000) return ["BLU", colourStateColors["BLU"]];
+    if (ceilingFt >= 1500 && visibilityMeter >= 5000) return ["WHT", colourStateColors["WHT"]];
+    if (ceilingFt >= 700 && visibilityMeter >= 3700) return ["GRN", colourStateColors["GRN"]];
+    if (ceilingFt >= 300 && visibilityMeter >= 1600) return ["YLO", colourStateColors["YLO"]];
+    if (ceilingFt >= 200 && visibilityMeter >= 800) return ["AMB", colourStateColors["AMB"]];
+    return ["RED", colourStateColors["RED"]];
+}
 
 function drawFlightCategoryBadge(x, y, category) {
     const w = 48;
@@ -1168,7 +1200,7 @@ function drawFlightCategoryBadge(x, y, category) {
     const r = 6;
 
     this.ctx.save();
-    this.ctx.fillStyle = flightCategoryColors[category] || "#777";
+    this.ctx.fillStyle = category[1][0]; // || "#777";
 
     this.ctx.beginPath();
     this.ctx.moveTo(x + r, y);
@@ -1183,11 +1215,11 @@ function drawFlightCategoryBadge(x, y, category) {
     this.ctx.closePath();
     this.ctx.fill();
 
-    this.ctx.fillStyle = "#fff";
+    this.ctx.fillStyle = category[1][1]; // || "#fff";
     this.ctx.font = `bold ${font_size}px sans-serif`;
     this.ctx.textAlign = "center";
     this.ctx.textBaseline = "middle";
-    this.ctx.fillText(category, x + w / 2, y + h / 2);
+    this.ctx.fillText(category[0], x + w / 2, y + h / 2);
 
     this.ctx.restore();
 }
@@ -1222,7 +1254,8 @@ function doRender() {
         drawVisibility.call(this, 290, start + 2 * lineHeight, 170, this.metar.visibility); // ok
         drawAirportId.call(this, 290, start + 3 * lineHeight, 170, this.airport); // ok
         
-        drawFlightCategoryBadge.call(this, 440, 210, getFlightCategory(this.metar)); // ok
+        drawFlightCategoryBadge.call(this, 440, 183, getFlightCategory(this.metar)); // ok
+        drawFlightCategoryBadge.call(this, 440, 211, getColourState(this.metar)); // ok
     }
     drawCompassRose.call(this, cx, cy, radius);
 }
