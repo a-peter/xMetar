@@ -639,7 +639,15 @@ search(prefixes, (query, callback) => {
         is_note = false;
         callback([xmetar_result]);
         return;
-    } 
+    }
+
+    // Try to find airport name for given ICAO code and append to label
+    this.$api.airports.find_airport_by_icao(guid, data[1], (airports) => {
+        if (airports && airports.length > 0) {
+            xmetar_result.label += ` (${airports[0].name}${airports[0].iata? ' / '+airports[0].iata : ''})`;
+            callback([xmetar_result]);
+        }
+    });
     
     xmetar_result = {
         uid: xmetar_result_uid,
