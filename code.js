@@ -38,6 +38,7 @@ this.widgetStore = {
     isLiveWeather: true,
     tempInCelsius: true,
     qnhInHpa: true,
+    showDA: true,
     minRwyLengthFt: 0,
     maxAirportCount: 10,
     copyMetarToClipboard: true,
@@ -65,6 +66,16 @@ settings_define({
         value: this.widgetStore.qnhInHpa,
         changed: (value) => {
             this.widgetStore.qnhInHpa = value;
+            this.$api.datastore.export(this.widgetStore);
+        }
+    },
+    showDA: {
+        label: 'Show Density Altitude',
+        type: 'checkbox',
+        description: 'Show density altitude on the widget',
+        value: this.widgetStore.showDA,
+        changed: (value) => {
+            this.widgetStore.showDA = value;
             this.$api.datastore.export(this.widgetStore);
         }
     },
@@ -1309,7 +1320,9 @@ function doRender() {
         drawQnhAltimeter.call(this, xPos, start + lineHeight, 170, this.metar.press); // ok
         drawElevation.call(this, xPos + 90, start + lineHeight, 270, this.airport); // ok
         drawVisibility.call(this, xPos, start + 2 * lineHeight, 170, this.metar.visibility); // ok
-        drawDensityAltitude.call(this, xPos + 90, start + 2 * lineHeight, 170, this.metar); // ok
+        if (this.widgetStore.showDA) {
+            drawDensityAltitude.call(this, xPos + 90, start + 2 * lineHeight, 170, this.metar); // ok
+        }
         drawAirportId.call(this, xPos, start + 3 * lineHeight, 170, this.airport); // ok
         
         drawFlightCategoryBadge.call(this, 440, 183, getFlightCategory(this.metar)); // ok
