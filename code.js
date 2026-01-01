@@ -1,4 +1,4 @@
-// Version 1.6
+// Version 1.7
 // Author: Ape42
 // Description: xMETAR widget for Flow Pro - displays METAR information for a given ICAO code including wind and cloud diagram.
 // Usage: Type "xmetar &lt;ICAO&gt;" in Flow Pro search to get METAR information for the given ICAO code.
@@ -38,6 +38,7 @@ this.widgetStore = {
     isLiveWeather: true,
     tempInCelsius: true,
     qnhInHpa: true,
+    showDA: true,
     minRwyLengthFt: 0,
     maxAirportCount: 10,
     copyMetarToClipboard: true,
@@ -65,6 +66,16 @@ settings_define({
         value: this.widgetStore.qnhInHpa,
         changed: (value) => {
             this.widgetStore.qnhInHpa = value;
+            this.$api.datastore.export(this.widgetStore);
+        }
+    },
+    showDA: {
+        label: 'Show Density Altitude',
+        type: 'checkbox',
+        description: 'Show density altitude on the widget',
+        value: this.widgetStore.showDA,
+        changed: (value) => {
+            this.widgetStore.showDA = value;
             this.$api.datastore.export(this.widgetStore);
         }
     },
@@ -155,6 +166,7 @@ loop_1hz(() => {
 function mps2kt(mps) { return mps * 0.868976; }
 function miles2meters(miles) { return miles * 1609.344; }
 function meters2miles(meter) { return meter / 1609.344; }
+function meters2feet(meter) { return meter * 3.28084; }
 function celsius2fahrenheit(celsius) { return celsius * 1.8 + 32; }
 function inhg2hpa(inhg) { return inhg * 33.863889532611; }
 function hpa2inhg(hpa) { return hpa * 0.02952998057228; }
@@ -293,7 +305,7 @@ function parse_metar(metar) {
                 match = metar_parts[i].match(/^(FEW|SCT|BKN|OVC|VV)(\d+)?/);
                 if (match) {
                     if (!isNaN(match[2])) {
-                        console.log(`xMETAR: Cloud match: ${match[1]} at ${match[2]}00 ft`);
+                        debug_on && console.log(`xMETAR: Cloud match: ${match[1]} at ${match[2]}00 ft`);
                         metar_data.clouds.push({'code': match[1], 'height': match[2] ? Number(match[2]) * 100 : null});
                     }
                     // may occur multiple times
@@ -639,7 +651,15 @@ search(prefixes, (query, callback) => {
         is_note = false;
         callback([xmetar_result]);
         return;
-    } 
+    }
+
+    // Try to find airport name for given ICAO code and append to label
+    this.$api.airports.find_airport_by_icao(guid, data[1], (airports) => {
+        if (airports && airports.length > 0) {
+            xmetar_result.label += ` (${airports[0].name}${airports[0].iata? ' / '+airports[0].iata : ''})`;
+            callback([xmetar_result]);
+        }
+    });
     
     xmetar_result = {
         uid: xmetar_result_uid,
@@ -1119,11 +1139,13 @@ function drawTempDewRh(x, y, width, temp) {
 
     let text = '';
     if (this.widgetStore.tempInCelsius) {
-        text = `T/D ${Math.round(temp.temp.c)}C/${Math.round(temp.dew.c)}C  RH ${rh}%`;
+        text = `T/D ${Math.round(temp.temp.c)}/${Math.round(temp.dew.c)}C`;
     } else {
-        text = `T/D ${Math.round(temp.temp.f)}F/${Math.round(temp.temp.f)}F  RH ${rh}%`;
+        text = `T/D ${Math.round(temp.temp.f)}/${Math.round(temp.temp.f)}F`;
     }
     this.ctx.fillText(text, x, y);
+
+    this.ctx.fillText(`RH ${rh}%`, x + 90, y);
 
     this.ctx.restore();
 }
@@ -1144,6 +1166,49 @@ function drawQnhAltimeter(x, y, width, pressure) {
         text += `QNH ${pressure.inhg.toFixed(2)}`
     }
 
+    this.ctx.fillText(text, x, y);
+    this.ctx.restore();
+}
+
+function drawElevation(x, y, width, airport) {
+    this.ctx.save();
+
+    this.ctx.fillStyle = "#fff";
+    this.ctx.font = `${font_size}px sans-serif`;
+    this.ctx.textAlign = "left";
+    this.ctx.textBaseline = "top";
+
+    let text = `ELEV ${Math.round(meters2feet(airport.altitude))} ft`;
+    this.ctx.fillText(text, x, y);
+    this.ctx.restore();
+}
+
+function calculateDensityAltitude(elevationFt, pressureHpa, tempC) {
+    // NWS formula:
+    // DA = PA + [120 x (OAT - ISA Temp)]
+    // See https://en.wikipedia.org/wiki/Density_altitude#Approximation_formula_for_calculating_the_density_altitude_from_the_pressure_altitude
+    // See https://www.weather.gov/media/epz/wxcalc/densityAltitude.pdf
+    let pa = elevationFt + 27 * (1013.25 - pressureHpa); // Pressure Altitude
+    let isaTemp = 15 - (0.00198 * pa); // ISA Temperature at elevation
+    let da_nws_formula = pa + 118.8 * (tempC - isaTemp);
+
+    return da_nws_formula;
+}
+
+function drawDensityAltitude(x, y, width, metar) {
+    const tempC = metar.temp ? metar.temp.temp.c : null;
+    const tempF = metar.temp ? metar.temp.temp.f : null;
+    const pressureHpa = metar.press ? metar.press.hpa : null;
+    const elevationFt = this.airport ? meters2feet(this.airport.altitude) : 0;
+    if (tempC == null || pressureHpa == null) return;
+
+    const densityAltitudeFt = calculateDensityAltitude(elevationFt, pressureHpa, tempC, tempF);
+    this.ctx.save();
+    this.ctx.fillStyle = "#fff";
+    this.ctx.font = `${font_size}px sans-serif`;
+    this.ctx.textAlign = "left";
+    this.ctx.textBaseline = "top";
+    let text = `DA ${Math.round(densityAltitudeFt)} ft`;
     this.ctx.fillText(text, x, y);
     this.ctx.restore();
 }
@@ -1246,13 +1311,19 @@ function doRender() {
         }
         drawWind.call(this, cx, cy, radius, this.metar.wind, 50); // ok
         
+        const lineHeight = 17, start = 183, xPos = cx + radius + 10;
+        // console.log(xPos);
+
         drawCloudDiagram.call(this, 290, 175, 170, 150, this.metar.clouds); // ok
         
-        const lineHeight = 17, start = 183;
-        drawTempDewRh.call(this, 290, start, 170, this.metar.temp); // ok
-        drawQnhAltimeter.call(this, 290, start + lineHeight, 170, this.metar.press); // ok
-        drawVisibility.call(this, 290, start + 2 * lineHeight, 170, this.metar.visibility); // ok
-        drawAirportId.call(this, 290, start + 3 * lineHeight, 170, this.airport); // ok
+        drawTempDewRh.call(this, xPos, start, 170, this.metar.temp); // ok
+        drawQnhAltimeter.call(this, xPos, start + lineHeight, 170, this.metar.press); // ok
+        drawElevation.call(this, xPos + 90, start + lineHeight, 270, this.airport); // ok
+        drawVisibility.call(this, xPos, start + 2 * lineHeight, 170, this.metar.visibility); // ok
+        if (this.widgetStore.showDA) {
+            drawDensityAltitude.call(this, xPos + 90, start + 2 * lineHeight, 170, this.metar); // ok
+        }
+        drawAirportId.call(this, xPos, start + 3 * lineHeight, 170, this.airport); // ok
         
         drawFlightCategoryBadge.call(this, 440, 183, getFlightCategory(this.metar)); // ok
         drawFlightCategoryBadge.call(this, 440, 211, getColourState(this.metar)); // ok
