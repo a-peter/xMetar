@@ -46,6 +46,7 @@ this.widgetStore = {
     showWidgetAfterMetarFetch: true,
 };
 this.$api.datastore.import(this.widgetStore);
+this.widgetStore.active = false; // Always start hidden — METAR data is not persisted between sessions
 
 // Settings definition
 settings_define({
@@ -623,12 +624,14 @@ search(prefixes, (query, callback) => {
             label: 'XMETAR .',
             subtext: 'Get METAR close to current aircraft position',
             execute: () => {
-                this.mode = metar_mode.position;
                 const [lat, lon] = getAircraftPosition.call(this);
                 // find nearest airports within 100km, limit 1
                 this.$api.airports.find_airports_by_coords(guid, lon, lat, 100000, 1,
                     (callback_added) => {
+                        this.mode = metar_mode.position;
                         this.airport = callback_added[0];
+                        const weather = this.$api.weather.get_weather();
+                        console.log(`Current weather: ${JSON.stringify(weather)}`);
                         this.$api.weather.find_metar_from_coords(lat, lon, (metar_callback) => {
                             this.debug_on && console.log('METAR from aircraft position: ' + JSON.stringify(metar_callback));
                             getMETAR.call(this, metar_callback, xmetar_result_current_position, callback);
