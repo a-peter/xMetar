@@ -445,17 +445,6 @@ function getMETAR(metar_raw, result, callback) {
         if (w.from && w.to) windStr += ' (' + w.from + '°–' + w.to + '°)';
         result.subtext += '<p>Wind: ' + windStr + '</p>';
     }
-    if (this.metar.clouds && this.metar.clouds.length > 0) {
-        const coverageName = { FEW: 'Few', SCT: 'Scattered', BKN: 'Broken', OVC: 'Overcast', VV: 'Vert. Visibility' };
-        const coveragePct  = { FEW: '25%', SCT: '50%', BKN: '75%', OVC: '100%', VV: '—' };
-        const sorted = [...this.metar.clouds].sort((a, b) => b.height - a.height);
-        let table = '<table><tr><th>Clouds</th><th>Height</th><th>Percentage</th></tr>';
-        for (const layer of sorted) {
-            table += '<tr><td>' + (coverageName[layer.code] || layer.code) + '</td><td>' + layer.height + 'ft</td><td>' + (coveragePct[layer.code] || '—') + '</td></tr>';
-        }
-        table += '</table>';
-        result.subtext += table;
-    }
     if (this.metar.visibility) {
         const v = this.metar.visibility;
         if (v.source === 'CAVOK') {
@@ -466,6 +455,19 @@ function getMETAR(metar_raw, result, callback) {
             const smStr = v.m === 9999 ? '10+SM' : smVal + 'SM';
             result.subtext += '<p>Visibility: ' + mStr + ' (' + smStr + ')</p>';
         }
+    }
+    if (this.metar.clouds && this.metar.clouds.length > 0) {
+        const coverageName = { FEW: 'Few', SCT: 'Scattered', BKN: 'Broken', OVC: 'Overcast', VV: 'Vert. Visibility' };
+        const coveragePct  = { FEW: '25%', SCT: '50%', BKN: '75%', OVC: '100%', VV: '—' };
+        const sorted = [...this.metar.clouds].sort((a, b) => b.height - a.height);
+        const tdStyle = 'style="padding-right:16px"';
+        const thStyle = 'style="padding-right:16px;border-bottom:1px solid currentColor"';
+        let table = '<table><tr><th ' + thStyle + '>Clouds</th><th ' + thStyle + '>Height</th><th style="border-bottom:1px solid currentColor">Percentage</th></tr>';
+        for (const layer of sorted) {
+            table += '<tr><td ' + tdStyle + '>' + (coverageName[layer.code] || layer.code) + '</td><td ' + tdStyle + '>' + layer.height + 'ft</td><td>' + (coveragePct[layer.code] || '—') + '</td></tr>';
+        }
+        table += '</table>';
+        result.subtext += table;
     }
 
     try {
