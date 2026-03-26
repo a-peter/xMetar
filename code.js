@@ -219,7 +219,7 @@ function parse_metar(metar) {
                 match = metar_parts[i].match(/^(\d\d)(\d\d)(\d\d)Z$/);
                 if (match) {
                     let now = new Date();
-                    metar_data.time = new Date(Date.parse(`${now.getUTCFullYear()}-${now.getUTCMonth()+1}-${match[1]}T${match[2]}:${match[3]}:00Z`));
+                    metar_data.time = new Date(Date.parse(`${now.getUTCFullYear()}-${String(now.getUTCMonth()+1).padStart(2,'0')}-${match[1]}T${match[2]}:${match[3]}:00Z`));
                     // console.log(`xMETAR: metar_data.time: ${metar_data.time.toUTCString()}`);
                     mode = 2;
                 } else {
@@ -422,6 +422,30 @@ function getMETAR(metar_raw, result, callback) {
     this.metar_icao =  this.metar.icao;
 
     result.subtext += '<p>' + metar_raw.metarString + '</p>';
+
+    // Human-readable METAR breakdown
+    result.subtext += '<p>Station: ' + this.metar.icao + '</p>';
+    if (this.metar.time) {
+        const day   = String(this.metar.time.getUTCDate()).padStart(2, '0');
+        const hours = String(this.metar.time.getUTCHours()).padStart(2, '0');
+        const mins  = String(this.metar.time.getUTCMinutes()).padStart(2, '0');
+        result.subtext += '<p>Time: Day ' + day + ', ' + hours + ':' + mins + 'Z</p>';
+    }
+    if (this.metar.wind) {
+        const w = this.metar.wind;
+        let windStr;
+        if (w.speed === 0) {
+            windStr = 'Calm';
+        } else if (w.degrees === 'VRB') {
+            windStr = 'Variable at ' + w.speed + 'kt';
+        } else {
+            windStr = w.degrees + '° at ' + w.speed + 'kt';
+        }
+        if (w.gusts) windStr += ', gusting ' + w.gusts + 'kt';
+        if (w.from && w.to) windStr += ' (' + w.from + '°–' + w.to + '°)';
+        result.subtext += '<p>Wind: ' + windStr + '</p>';
+    }
+
     try {
         if (this.widgetStore.showWidgetAfterMetarFetch) {
             this.widgetStore.active = true; // show widget
