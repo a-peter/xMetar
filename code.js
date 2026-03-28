@@ -1,4 +1,4 @@
-// Version 1.7
+// Version 1.8
 // Author: Ape42
 // Description: xMETAR widget for Flow Pro - displays METAR information for a given ICAO code including wind and cloud diagram.
 // Usage: Type "xmetar &lt;ICAO&gt;" in Flow Pro search to get METAR information for the given ICAO code.
@@ -46,6 +46,7 @@ this.widgetStore = {
     showWidgetAfterMetarFetch: true,
 };
 this.$api.datastore.import(this.widgetStore);
+this.widgetStore.active = false; // Always start hidden — METAR data is not persisted between sessions
 
 // Settings definition
 settings_define({
@@ -218,7 +219,7 @@ function parse_metar(metar) {
                 match = metar_parts[i].match(/^(\d\d)(\d\d)(\d\d)Z$/);
                 if (match) {
                     let now = new Date();
-                    metar_data.time = new Date(Date.parse(`${now.getUTCFullYear()}-${now.getUTCMonth()+1}-${match[1]}T${match[2]}:${match[3]}:00Z`));
+                    metar_data.time = new Date(Date.parse(`${now.getUTCFullYear()}-${String(now.getUTCMonth()+1).padStart(2,'0')}-${match[1]}T${match[2]}:${match[3]}:00Z`));
                     // console.log(`xMETAR: metar_data.time: ${metar_data.time.toUTCString()}`);
                     mode = 2;
                 } else {
@@ -421,6 +422,108 @@ function getMETAR(metar_raw, result, callback) {
     this.metar_icao =  this.metar.icao;
 
     result.subtext += '<p>' + metar_raw.metarString + '</p>';
+
+    // Human-readable METAR breakdown
+    const airportName = this.airport ? this.airport.name : '';
+    result.subtext += '<p>Station: ' + this.metar.icao + (airportName ? ' – ' + airportName : '') + '</p>';
+    if (this.metar.time) {
+        const day        = String(this.metar.time.getUTCDate()).padStart(2, '0');
+        const hours      = String(this.metar.time.getUTCHours()).padStart(2, '0');
+        const mins       = String(this.metar.time.getUTCMinutes()).padStart(2, '0');
+        const localHours = String(this.metar.time.getHours()).padStart(2, '0');
+        const localMins  = String(this.metar.time.getMinutes()).padStart(2, '0');
+        result.subtext += '<p>Time: Day ' + day + ', ' + hours + ':' + mins + 'Z (' + localHours + ':' + localMins + ' local)</p>';
+    }
+    if (this.metar.wind) {
+        const w = this.metar.wind;
+        let windStr;
+        if (w.speed === 0) {
+            windStr = 'Calm';
+        } else if (w.degrees === 'VRB') {
+            windStr = 'Variable at ' + w.speed + 'kt';
+        } else {
+            windStr = w.degrees + '° at ' + w.speed + 'kt';
+        }
+        if (w.gusts) windStr += ', gusting ' + w.gusts + 'kt';
+        if (w.from && w.to) windStr += ' (' + w.from + '°–' + w.to + '°)';
+        result.subtext += '<p>Wind: ' + windStr + '</p>';
+    }
+    if (this.metar.visibility) {
+        const v = this.metar.visibility;
+        if (v.source === 'CAVOK') {
+            result.subtext += '<p>Visibility: CAVOK</p>';
+        } else {
+            const mStr  = v.m === 9999 ? '9999m' : v.m + 'm';
+            const smVal = v.sm_original ? v.sm_original : (Number.isInteger(v.sm) ? v.sm : v.sm.toFixed(1));
+            const smStr = v.m === 9999 ? '10+SM' : smVal + 'SM';
+            result.subtext += '<p>Visibility: ' + mStr + ' (' + smStr + ')</p>';
+        }
+    }
+    if (this.metar.clouds && this.metar.clouds.length > 0) {
+        const coverageName = { FEW: 'Few', SCT: 'Scattered', BKN: 'Broken', OVC: 'Overcast', VV: 'Vert. Visibility' };
+        const coveragePct  = { FEW: '25%', SCT: '50%', BKN: '75%', OVC: '100%', VV: '—' };
+        const sorted = [...this.metar.clouds].sort((a, b) => b.height - a.height);
+        const tdStyle = 'style="padding-right:16px"';
+        const thStyle = 'style="padding-right:16px;border-bottom:1px solid currentColor"';
+        let table = '<table><tr><th ' + thStyle + '>Clouds</th><th ' + thStyle + '>Height</th><th style="border-bottom:1px solid currentColor">Percentage</th></tr>';
+        for (const layer of sorted) {
+            table += '<tr><td ' + tdStyle + '>' + (coverageName[layer.code] || layer.code) + '</td><td ' + tdStyle + '>' + layer.height + 'ft</td><td>' + (coveragePct[layer.code] || '—') + '</td></tr>';
+        }
+        table += '</table>';
+        result.subtext += table;
+    }
+    if (this.metar.temp) {
+        const t = this.metar.temp;
+        const useCelsius = this.widgetStore.tempInCelsius;
+        const unit = useCelsius ? '°C' : '°F';
+        const temp = useCelsius ? t.temp.c : Math.round(t.temp.f);
+        const dew  = useCelsius ? t.dew.c  : Math.round(t.dew.f);
+        const rh = calcRelativeHumidity(t.temp.c, t.dew.c);
+        result.subtext += '<p>Temp: ' + temp + unit + ' / Dew: ' + dew + unit + ' / RH: ' + rh + '%</p>';
+    }
+    if (this.metar.press) {
+        const p = this.metar.press;
+        const qnhStr = this.widgetStore.qnhInHpa
+            ? p.hpa + ' hPa (' + p.inhg + ' inHg)'
+            : p.inhg + ' inHg (' + p.hpa + ' hPa)';
+        let pressLine = 'QNH: ' + qnhStr;
+        if (this.airport && this.airport.altitude != null) {
+            pressLine += ' / Elev: ' + Math.round(meters2feet(this.airport.altitude)) + 'ft';
+        }
+        result.subtext += '<p>' + pressLine + '</p>';
+    }
+
+    if (this.airport && this.airport.frequencies && this.airport.frequencies.length > 0) {
+        const freqTypes = {
+            1: 'ATIS',
+            7: 'ATIS',
+            5: 'Ground',
+            6: 'Tower',
+            8: 'Approach',
+        };
+        const typeOrder = ['ATIS', 'Ground', 'Tower', 'Approach'];
+        const relevantTypes = [1, 7, 5, 6, 8];
+        const grouped = {};
+        for (const f of this.airport.frequencies) {
+            if (!relevantTypes.includes(f.type)) continue;
+            const label = freqTypes[f.type];
+            const freq  = f.freqMHz.toFixed(3);
+            if (!grouped[label]) grouped[label] = new Set();
+            grouped[label].add(freq);
+        }
+        const rows = typeOrder.filter(label => grouped[label]);
+        if (rows.length > 0) {
+            const tdStyle = 'style="padding-right:16px"';
+            const thStyle = 'style="padding-right:16px;border-bottom:1px solid currentColor"';
+            let table = '<table><tr><th ' + thStyle + '>Type</th><th style="border-bottom:1px solid currentColor">Frequency</th></tr>';
+            for (const label of rows) {
+                table += '<tr><td ' + tdStyle + '>' + label + '</td><td>' + [...grouped[label]].join(', ') + '</td></tr>';
+            }
+            table += '</table>';
+            result.subtext += table;
+        }
+    }
+
     try {
         if (this.widgetStore.showWidgetAfterMetarFetch) {
             this.widgetStore.active = true; // show widget
@@ -623,12 +726,14 @@ search(prefixes, (query, callback) => {
             label: 'XMETAR .',
             subtext: 'Get METAR close to current aircraft position',
             execute: () => {
-                this.mode = metar_mode.position;
                 const [lat, lon] = getAircraftPosition.call(this);
                 // find nearest airports within 100km, limit 1
                 this.$api.airports.find_airports_by_coords(guid, lon, lat, 100000, 1,
                     (callback_added) => {
+                        this.mode = metar_mode.position;
                         this.airport = callback_added[0];
+                        const weather = this.$api.weather.get_weather();
+                        console.log(`Current weather: ${JSON.stringify(weather)}`);
                         this.$api.weather.find_metar_from_coords(lat, lon, (metar_callback) => {
                             this.debug_on && console.log('METAR from aircraft position: ' + JSON.stringify(metar_callback));
                             getMETAR.call(this, metar_callback, xmetar_result_current_position, callback);
@@ -676,9 +781,7 @@ search(prefixes, (query, callback) => {
                     callback([xmetar_result]);
                     return;
                 }
-                // console.log('Airport found: ' + JSON.stringify(airports[0]));
-                // console.log('Airport found: airportClass=' + JSON.stringify(airports[0].airportClass));
-                console.log('Airport found: ' + airports[0].lat + ' - ' + airports[0].lon);
+                debug_on && console.log('Airport found: ' + airports[0].lat + ' - ' + airports[0].lon);
 
                 this.airport = airports[0];
                 this.$api.weather.find_metar_from_coords(this.airport.lat, this.airport.lon, (metar_callback) => {
