@@ -424,7 +424,8 @@ function getMETAR(metar_raw, result, callback) {
     result.subtext += '<p>' + metar_raw.metarString + '</p>';
 
     // Human-readable METAR breakdown
-    result.subtext += '<p>Station: ' + this.metar.icao + '</p>';
+    const airportName = this.airport ? this.airport.name : '';
+    result.subtext += '<p>Station: ' + this.metar.icao + (airportName ? ' – ' + airportName : '') + '</p>';
     if (this.metar.time) {
         const day   = String(this.metar.time.getUTCDate()).padStart(2, '0');
         const hours = String(this.metar.time.getUTCHours()).padStart(2, '0');
@@ -468,6 +469,26 @@ function getMETAR(metar_raw, result, callback) {
         }
         table += '</table>';
         result.subtext += table;
+    }
+    if (this.metar.temp) {
+        const t = this.metar.temp;
+        const useCelsius = this.widgetStore.tempInCelsius;
+        const unit = useCelsius ? '°C' : '°F';
+        const temp = useCelsius ? t.temp.c : Math.round(t.temp.f);
+        const dew  = useCelsius ? t.dew.c  : Math.round(t.dew.f);
+        const rh = calcRelativeHumidity(t.temp.c, t.dew.c);
+        result.subtext += '<p>Temp: ' + temp + unit + ' / Dew: ' + dew + unit + ' / RH: ' + rh + '%</p>';
+    }
+    if (this.metar.press) {
+        const p = this.metar.press;
+        const qnhStr = this.widgetStore.qnhInHpa
+            ? p.hpa + ' hPa (' + p.inhg + ' inHg)'
+            : p.inhg + ' inHg (' + p.hpa + ' hPa)';
+        let pressLine = 'QNH: ' + qnhStr;
+        if (this.airport && this.airport.altitude != null) {
+            pressLine += ' / Elev: ' + Math.round(meters2feet(this.airport.altitude)) + 'ft';
+        }
+        result.subtext += '<p>' + pressLine + '</p>';
     }
 
     try {
