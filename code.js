@@ -1,4 +1,4 @@
-// Version 1.8
+// Version 1.9
 // Author: Ape42
 // Description: xMETAR widget for Flow Pro - displays METAR information for a given ICAO code including wind and cloud diagram.
 // Usage: Type "xmetar &lt;ICAO&gt;" in Flow Pro search to get METAR information for the given ICAO code.
@@ -422,20 +422,40 @@ function getMETAR(metar_raw, result, callback) {
     this.metar_icao =  this.metar.icao;
 
     result.subtext += '<p>' + metar_raw.metarString + '</p>';
+    result.subtext += buildMetarSubtext(this.metar, this.airport, this.widgetStore);
 
-    // Human-readable METAR breakdown
-    const airportName = this.airport ? this.airport.name : '';
-    result.subtext += '<p>Station: ' + this.metar.icao + (airportName ? ' – ' + airportName : '') + '</p>';
-    if (this.metar.time) {
-        const day        = String(this.metar.time.getUTCDate()).padStart(2, '0');
-        const hours      = String(this.metar.time.getUTCHours()).padStart(2, '0');
-        const mins       = String(this.metar.time.getUTCMinutes()).padStart(2, '0');
-        const localHours = String(this.metar.time.getHours()).padStart(2, '0');
-        const localMins  = String(this.metar.time.getMinutes()).padStart(2, '0');
-        result.subtext += '<p>Time: Day ' + day + ', ' + hours + ':' + mins + 'Z (' + localHours + ':' + localMins + ' local)</p>';
+    try {
+        if (this.widgetStore.showWidgetAfterMetarFetch) {
+            this.widgetStore.active = true; // show widget
+        }
+        doRender.call(this, this.metar);
+    } catch (e) {
+        console.error('xMETAR: Error during rendering: ' + e);
     }
-    if (this.metar.wind) {
-        const w = this.metar.wind;
+
+    if (this.widgetStore.keepOpen) {
+        debug_on && console.log('xMETAR: Keeping widget open after search');
+        callback([result]);
+    }
+}
+
+function buildMetarSubtext(metar, airport, widgetStore) {
+    let html = '';
+
+    const airportName = airport ? airport.name : '';
+    html += '<p>Station: ' + metar.icao + (airportName ? ' – ' + airportName : '') + '</p>';
+
+    if (metar.time) {
+        const day        = String(metar.time.getUTCDate()).padStart(2, '0');
+        const hours      = String(metar.time.getUTCHours()).padStart(2, '0');
+        const mins       = String(metar.time.getUTCMinutes()).padStart(2, '0');
+        const localHours = String(metar.time.getHours()).padStart(2, '0');
+        const localMins  = String(metar.time.getMinutes()).padStart(2, '0');
+        html += '<p>Time: Day ' + day + ', ' + hours + ':' + mins + 'Z (' + localHours + ':' + localMins + ' local)</p>';
+    }
+
+    if (metar.wind) {
+        const w = metar.wind;
         let windStr;
         if (w.speed === 0) {
             windStr = 'Calm';
@@ -446,23 +466,25 @@ function getMETAR(metar_raw, result, callback) {
         }
         if (w.gusts) windStr += ', gusting ' + w.gusts + 'kt';
         if (w.from && w.to) windStr += ' (' + w.from + '°–' + w.to + '°)';
-        result.subtext += '<p>Wind: ' + windStr + '</p>';
+        html += '<p>Wind: ' + windStr + '</p>';
     }
-    if (this.metar.visibility) {
-        const v = this.metar.visibility;
+
+    if (metar.visibility) {
+        const v = metar.visibility;
         if (v.source === 'CAVOK') {
-            result.subtext += '<p>Visibility: CAVOK</p>';
+            html += '<p>Visibility: CAVOK</p>';
         } else {
             const mStr  = v.m === 9999 ? '9999m' : v.m + 'm';
             const smVal = v.sm_original ? v.sm_original : (Number.isInteger(v.sm) ? v.sm : v.sm.toFixed(1));
             const smStr = v.m === 9999 ? '10+SM' : smVal + 'SM';
-            result.subtext += '<p>Visibility: ' + mStr + ' (' + smStr + ')</p>';
+            html += '<p>Visibility: ' + mStr + ' (' + smStr + ')</p>';
         }
     }
-    if (this.metar.clouds && this.metar.clouds.length > 0) {
+
+    if (metar.clouds && metar.clouds.length > 0) {
         const coverageName = { FEW: 'Few', SCT: 'Scattered', BKN: 'Broken', OVC: 'Overcast', VV: 'Vert. Visibility' };
         const coveragePct  = { FEW: '25%', SCT: '50%', BKN: '75%', OVC: '100%', VV: '—' };
-        const sorted = [...this.metar.clouds].sort((a, b) => b.height - a.height);
+        const sorted = [...metar.clouds].sort((a, b) => b.height - a.height);
         const tdStyle = 'style="padding-right:16px"';
         const thStyle = 'style="padding-right:16px;border-bottom:1px solid currentColor"';
         let table = '<table><tr><th ' + thStyle + '>Clouds</th><th ' + thStyle + '>Height</th><th style="border-bottom:1px solid currentColor">Percentage</th></tr>';
@@ -470,41 +492,47 @@ function getMETAR(metar_raw, result, callback) {
             table += '<tr><td ' + tdStyle + '>' + (coverageName[layer.code] || layer.code) + '</td><td ' + tdStyle + '>' + layer.height + 'ft</td><td>' + (coveragePct[layer.code] || '—') + '</td></tr>';
         }
         table += '</table>';
-        result.subtext += table;
+        html += table;
     }
-    if (this.metar.temp) {
-        const t = this.metar.temp;
-        const useCelsius = this.widgetStore.tempInCelsius;
+
+    if (metar.temp) {
+        const t = metar.temp;
+        const useCelsius = widgetStore.tempInCelsius;
         const unit = useCelsius ? '°C' : '°F';
         const temp = useCelsius ? t.temp.c : Math.round(t.temp.f);
         const dew  = useCelsius ? t.dew.c  : Math.round(t.dew.f);
         const rh = calcRelativeHumidity(t.temp.c, t.dew.c);
-        result.subtext += '<p>Temp: ' + temp + unit + ' / Dew: ' + dew + unit + ' / RH: ' + rh + '%</p>';
+        html += '<p>Temp: ' + temp + unit + ' / Dew: ' + dew + unit + ' / RH: ' + rh + '%</p>';
     }
-    if (this.metar.press) {
-        const p = this.metar.press;
-        const qnhStr = this.widgetStore.qnhInHpa
+
+    if (metar.press) {
+        const p = metar.press;
+        const qnhStr = widgetStore.qnhInHpa
             ? p.hpa + ' hPa (' + p.inhg + ' inHg)'
             : p.inhg + ' inHg (' + p.hpa + ' hPa)';
         let pressLine = 'QNH: ' + qnhStr;
-        if (this.airport && this.airport.altitude != null) {
-            pressLine += ' / Elev: ' + Math.round(meters2feet(this.airport.altitude)) + 'ft';
-        }
-        result.subtext += '<p>' + pressLine + '</p>';
+        html += '<p>' + pressLine + '</p>';
     }
 
-    if (this.airport && this.airport.frequencies && this.airport.frequencies.length > 0) {
-        const freqTypes = {
-            1: 'ATIS',
-            7: 'ATIS',
-            5: 'Ground',
-            6: 'Tower',
-            8: 'Approach',
-        };
+    if (airport && airport.altitude != null) {
+        const elevFt = Math.round(meters2feet(airport.altitude));
+        let elevLine = 'Elev: ' + elevFt + ' ft';
+        if (widgetStore.showDA && metar.press && metar.temp) {
+            const da = Math.round(calculateDensityAltitude(elevFt, metar.press.hpa, metar.temp.temp.c));
+            const daStr = da > elevFt
+                ? ' / DA: <span style="font-size:1.3em">' + da + ' ft</span>'
+                : ' / DA: ' + da + ' ft';
+            elevLine += daStr;
+        }
+        html += '<p>' + elevLine + '</p>';
+    }
+
+    if (airport && airport.frequencies && airport.frequencies.length > 0) {
+        const freqTypes = { 1: 'ATIS', 7: 'ATIS', 5: 'Ground', 6: 'Tower', 8: 'Approach' };
         const typeOrder = ['ATIS', 'Ground', 'Tower', 'Approach'];
         const relevantTypes = [1, 7, 5, 6, 8];
         const grouped = {};
-        for (const f of this.airport.frequencies) {
+        for (const f of airport.frequencies) {
             if (!relevantTypes.includes(f.type)) continue;
             const label = freqTypes[f.type];
             const freq  = f.freqMHz.toFixed(3);
@@ -520,23 +548,11 @@ function getMETAR(metar_raw, result, callback) {
                 table += '<tr><td ' + tdStyle + '>' + label + '</td><td>' + [...grouped[label]].join(', ') + '</td></tr>';
             }
             table += '</table>';
-            result.subtext += table;
+            html += table;
         }
     }
 
-    try {
-        if (this.widgetStore.showWidgetAfterMetarFetch) {
-            this.widgetStore.active = true; // show widget
-        }
-        doRender.call(this, this.metar);
-    } catch (e) {
-        console.error('xMETAR: Error during rendering: ' + e);
-    }
-
-    if (this.widgetStore.keepOpen) {
-        debug_on && console.log('xMETAR: Keeping widget open after search');
-        callback([result]);
-    }
+    return html;
 }
 
 function getDistance(lat1, lon1, lat2, lon2) {
@@ -1291,7 +1307,7 @@ function calculateDensityAltitude(elevationFt, pressureHpa, tempC) {
     // DA = PA + [120 x (OAT - ISA Temp)]
     // See https://en.wikipedia.org/wiki/Density_altitude#Approximation_formula_for_calculating_the_density_altitude_from_the_pressure_altitude
     // See https://www.weather.gov/media/epz/wxcalc/densityAltitude.pdf
-    let pa = elevationFt + 27 * (1013.25 - pressureHpa); // Pressure Altitude
+    let pa = elevationFt + 27.3 * (1013.25 - pressureHpa); // Pressure Altitude
     let isaTemp = 15 - (0.00198 * pa); // ISA Temperature at elevation
     let da_nws_formula = pa + 118.8 * (tempC - isaTemp);
 
