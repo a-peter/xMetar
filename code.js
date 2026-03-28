@@ -1,4 +1,4 @@
-// Version 1.7
+// Version 1.8
 // Author: Ape42
 // Description: xMETAR widget for Flow Pro - displays METAR information for a given ICAO code including wind and cloud diagram.
 // Usage: Type "xmetar &lt;ICAO&gt;" in Flow Pro search to get METAR information for the given ICAO code.
@@ -427,10 +427,12 @@ function getMETAR(metar_raw, result, callback) {
     const airportName = this.airport ? this.airport.name : '';
     result.subtext += '<p>Station: ' + this.metar.icao + (airportName ? ' – ' + airportName : '') + '</p>';
     if (this.metar.time) {
-        const day   = String(this.metar.time.getUTCDate()).padStart(2, '0');
-        const hours = String(this.metar.time.getUTCHours()).padStart(2, '0');
-        const mins  = String(this.metar.time.getUTCMinutes()).padStart(2, '0');
-        result.subtext += '<p>Time: Day ' + day + ', ' + hours + ':' + mins + 'Z</p>';
+        const day        = String(this.metar.time.getUTCDate()).padStart(2, '0');
+        const hours      = String(this.metar.time.getUTCHours()).padStart(2, '0');
+        const mins       = String(this.metar.time.getUTCMinutes()).padStart(2, '0');
+        const localHours = String(this.metar.time.getHours()).padStart(2, '0');
+        const localMins  = String(this.metar.time.getMinutes()).padStart(2, '0');
+        result.subtext += '<p>Time: Day ' + day + ', ' + hours + ':' + mins + 'Z (' + localHours + ':' + localMins + ' local)</p>';
     }
     if (this.metar.wind) {
         const w = this.metar.wind;
@@ -489,6 +491,37 @@ function getMETAR(metar_raw, result, callback) {
             pressLine += ' / Elev: ' + Math.round(meters2feet(this.airport.altitude)) + 'ft';
         }
         result.subtext += '<p>' + pressLine + '</p>';
+    }
+
+    if (this.airport && this.airport.frequencies && this.airport.frequencies.length > 0) {
+        const freqTypes = {
+            1: 'ATIS',
+            7: 'ATIS',
+            5: 'Ground',
+            6: 'Tower',
+            8: 'Approach',
+        };
+        const typeOrder = ['ATIS', 'Ground', 'Tower', 'Approach'];
+        const relevantTypes = [1, 7, 5, 6, 8];
+        const grouped = {};
+        for (const f of this.airport.frequencies) {
+            if (!relevantTypes.includes(f.type)) continue;
+            const label = freqTypes[f.type];
+            const freq  = f.freqMHz.toFixed(3);
+            if (!grouped[label]) grouped[label] = new Set();
+            grouped[label].add(freq);
+        }
+        const rows = typeOrder.filter(label => grouped[label]);
+        if (rows.length > 0) {
+            const tdStyle = 'style="padding-right:16px"';
+            const thStyle = 'style="padding-right:16px;border-bottom:1px solid currentColor"';
+            let table = '<table><tr><th ' + thStyle + '>Type</th><th style="border-bottom:1px solid currentColor">Frequency</th></tr>';
+            for (const label of rows) {
+                table += '<tr><td ' + tdStyle + '>' + label + '</td><td>' + [...grouped[label]].join(', ') + '</td></tr>';
+            }
+            table += '</table>';
+            result.subtext += table;
+        }
     }
 
     try {
@@ -748,9 +781,7 @@ search(prefixes, (query, callback) => {
                     callback([xmetar_result]);
                     return;
                 }
-                // console.log('Airport found: ' + JSON.stringify(airports[0]));
-                // console.log('Airport found: airportClass=' + JSON.stringify(airports[0].airportClass));
-                console.log('Airport found: ' + airports[0].lat + ' - ' + airports[0].lon);
+                debug_on && console.log('Airport found: ' + airports[0].lat + ' - ' + airports[0].lon);
 
                 this.airport = airports[0];
                 this.$api.weather.find_metar_from_coords(this.airport.lat, this.airport.lon, (metar_callback) => {
