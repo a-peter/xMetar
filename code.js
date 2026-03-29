@@ -219,7 +219,7 @@ function parse_metar(metar) {
                 match = metar_parts[i].match(/^(\d\d)(\d\d)(\d\d)Z$/);
                 if (match) {
                     let now = new Date();
-                    metar_data.time = new Date(Date.parse(`${now.getUTCFullYear()}-${String(now.getUTCMonth()+1).padStart(2,'0')}-${match[1]}T${match[2]}:${match[3]}:00Z`));
+                    metar_data.time = new Date(Date.parse(`${now.getUTCFullYear()}-${pad2(now.getUTCMonth()+1)}-${match[1]}T${match[2]}:${match[3]}:00Z`));
                     // console.log(`xMETAR: metar_data.time: ${metar_data.time.toUTCString()}`);
                     mode = 2;
                 } else {
@@ -439,18 +439,23 @@ function getMETAR(metar_raw, result, callback) {
     }
 }
 
+const pad2 = (n) => String(n).padStart(2, '0');
+
 function buildMetarSubtext(metar, airport, widgetStore) {
     let html = '';
+    const tdStyle = 'style="padding-right:16px"';
+    const thStyle = 'style="padding-right:16px;border-bottom:1px solid currentColor"';
+    const thStyleLast = 'style="border-bottom:1px solid currentColor"';
 
     const airportName = airport ? airport.name : '';
     html += '<p>Station: ' + metar.icao + (airportName ? ' – ' + airportName : '') + '</p>';
 
     if (metar.time) {
-        const day        = String(metar.time.getUTCDate()).padStart(2, '0');
-        const hours      = String(metar.time.getUTCHours()).padStart(2, '0');
-        const mins       = String(metar.time.getUTCMinutes()).padStart(2, '0');
-        const localHours = String(metar.time.getHours()).padStart(2, '0');
-        const localMins  = String(metar.time.getMinutes()).padStart(2, '0');
+        const day        = pad2(metar.time.getUTCDate());
+        const hours      = pad2(metar.time.getUTCHours());
+        const mins       = pad2(metar.time.getUTCMinutes());
+        const localHours = pad2(metar.time.getHours());
+        const localMins  = pad2(metar.time.getMinutes());
         html += '<p>Time: Day ' + day + ', ' + hours + ':' + mins + 'Z (' + localHours + ':' + localMins + ' local)</p>';
     }
 
@@ -485,9 +490,7 @@ function buildMetarSubtext(metar, airport, widgetStore) {
         const coverageName = { FEW: 'Few', SCT: 'Scattered', BKN: 'Broken', OVC: 'Overcast', VV: 'Vert. Visibility' };
         const coveragePct  = { FEW: '25%', SCT: '50%', BKN: '75%', OVC: '100%', VV: '—' };
         const sorted = [...metar.clouds].sort((a, b) => b.height - a.height);
-        const tdStyle = 'style="padding-right:16px"';
-        const thStyle = 'style="padding-right:16px;border-bottom:1px solid currentColor"';
-        let table = '<table><tr><th ' + thStyle + '>Clouds</th><th ' + thStyle + '>Height</th><th style="border-bottom:1px solid currentColor">Percentage</th></tr>';
+        let table = '<table><tr><th ' + thStyle + '>Clouds</th><th ' + thStyle + '>Height</th><th ' + thStyleLast + '>Percentage</th></tr>';
         for (const layer of sorted) {
             table += '<tr><td ' + tdStyle + '>' + (coverageName[layer.code] || layer.code) + '</td><td ' + tdStyle + '>' + layer.height + 'ft</td><td>' + (coveragePct[layer.code] || '—') + '</td></tr>';
         }
@@ -510,8 +513,7 @@ function buildMetarSubtext(metar, airport, widgetStore) {
         const qnhStr = widgetStore.qnhInHpa
             ? p.hpa + ' hPa (' + p.inhg + ' inHg)'
             : p.inhg + ' inHg (' + p.hpa + ' hPa)';
-        let pressLine = 'QNH: ' + qnhStr;
-        html += '<p>' + pressLine + '</p>';
+        html += '<p>QNH: ' + qnhStr + '</p>';
     }
 
     if (airport && airport.altitude != null) {
@@ -530,20 +532,17 @@ function buildMetarSubtext(metar, airport, widgetStore) {
     if (airport && airport.frequencies && airport.frequencies.length > 0) {
         const freqTypes = { 1: 'ATIS', 7: 'ATIS', 5: 'Ground', 6: 'Tower', 8: 'Approach' };
         const typeOrder = ['ATIS', 'Ground', 'Tower', 'Approach'];
-        const relevantTypes = [1, 7, 5, 6, 8];
         const grouped = {};
         for (const f of airport.frequencies) {
-            if (!relevantTypes.includes(f.type)) continue;
             const label = freqTypes[f.type];
+            if (!label) continue;
             const freq  = f.freqMHz.toFixed(3);
             if (!grouped[label]) grouped[label] = new Set();
             grouped[label].add(freq);
         }
         const rows = typeOrder.filter(label => grouped[label]);
         if (rows.length > 0) {
-            const tdStyle = 'style="padding-right:16px"';
-            const thStyle = 'style="padding-right:16px;border-bottom:1px solid currentColor"';
-            let table = '<table><tr><th ' + thStyle + '>Type</th><th style="border-bottom:1px solid currentColor">Frequency</th></tr>';
+            let table = '<table><tr><th ' + thStyle + '>Type</th><th ' + thStyleLast + '>Frequency</th></tr>';
             for (const label of rows) {
                 table += '<tr><td ' + tdStyle + '>' + label + '</td><td>' + [...grouped[label]].join(', ') + '</td></tr>';
             }
@@ -748,8 +747,6 @@ search(prefixes, (query, callback) => {
                     (callback_added) => {
                         this.mode = metar_mode.position;
                         this.airport = callback_added[0];
-                        const weather = this.$api.weather.get_weather();
-                        console.log(`Current weather: ${JSON.stringify(weather)}`);
                         this.$api.weather.find_metar_from_coords(lat, lon, (metar_callback) => {
                             this.debug_on && console.log('METAR from aircraft position: ' + JSON.stringify(metar_callback));
                             getMETAR.call(this, metar_callback, xmetar_result_current_position, callback);
@@ -1108,8 +1105,8 @@ function drawRunway(cx, cy, r, runway, icao) {
     // Draw runway designators without letters.
     const [p1, p2] = runwayLabelPositions(ox, oy, r, angleDeg);
     const designators = runway.designation.split('-');
-    drawRunwayText.call(this, p1.x, p1.y, designators[1].padStart(2, '0') + suffix1);
-    drawRunwayText.call(this, p2.x, p2.y, designators[0].padStart(2, '0') + suffix2);
+    drawRunwayText.call(this, p1.x, p1.y, pad2(designators[1]) + suffix1);
+    drawRunwayText.call(this, p2.x, p2.y, pad2(designators[0]) + suffix2);
 }
 
 function drawArrow(x, y, angle, length, color = "red") {
@@ -1309,9 +1306,7 @@ function calculateDensityAltitude(elevationFt, pressureHpa, tempC) {
     // See https://www.weather.gov/media/epz/wxcalc/densityAltitude.pdf
     let pa = elevationFt + 27.3 * (1013.25 - pressureHpa); // Pressure Altitude
     let isaTemp = 15 - (0.00198 * pa); // ISA Temperature at elevation
-    let da_nws_formula = pa + 118.8 * (tempC - isaTemp);
-
-    return da_nws_formula;
+    return pa + 118.8 * (tempC - isaTemp);
 }
 
 function drawDensityAltitude(x, y, width, metar) {
@@ -1321,7 +1316,7 @@ function drawDensityAltitude(x, y, width, metar) {
     const elevationFt = this.airport ? meters2feet(this.airport.altitude) : 0;
     if (tempC == null || pressureHpa == null) return;
 
-    const densityAltitudeFt = calculateDensityAltitude(elevationFt, pressureHpa, tempC, tempF);
+    const densityAltitudeFt = calculateDensityAltitude(elevationFt, pressureHpa, tempC);
     this.ctx.save();
     this.ctx.fillStyle = "#fff";
     this.ctx.font = `${font_size}px sans-serif`;
