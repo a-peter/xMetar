@@ -1,0 +1,24 @@
+{
+	"app_version": "2025.51.4.22",
+	"scripts": [
+		{
+			"code": "javascript",
+			"name": "xMETAR",
+			"short": "mdi:weather-partly-snowy-rainy",
+			"uid": "5ec23392-1b82-41af-ab85-9a50305463cb",
+			"params": {
+				"code_js": "",
+				"code_css": "",
+				"code_html": "",
+				"last_edit": 1774720449019,
+				"search_prefix":["xmetar","xm"],
+				"can_otto":true,
+				"description": "This widget retrieves the METAR information for an airport. In case that the airport does not have a METAR reporting, the closest is shown. Visualizes the information.",
+				"aircraft": null,
+				"tags": "Misc.",
+				"creator": "Ape42_3060",
+				"package": "p42-util-flow-ape42_3060-xmetar"
+			}
+		}
+	]
+}

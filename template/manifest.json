@@ -1,0 +1,15 @@
+{
+    "dependencies": [],
+    "content_type": "MISC",
+    "title": "Flow Scripts by Ape42_3060 - METAR2",
+    "manufacturer": "",
+    "creator": "ape42_3060",
+    "package_version": "1.10.0",
+    "minimum_game_version": "1.0.0",
+    "release_notes": {
+        "neutral": {
+            "LastUpdate": "Added support for airports without runways (e.g. helipads) by drawing a helipad symbol instead of runways",
+            "OlderHistory": "Added human-readable METAR breakdown to search result"
+        }
+    }
+}
