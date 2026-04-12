@@ -1,4 +1,4 @@
-// Version 1.9
+// Version 1.10
 // Author: Ape42
 // Description: xMETAR widget for Flow Pro - displays METAR information for a given ICAO code including wind and cloud diagram.
 // Usage: Type "xmetar &lt;ICAO&gt;" in Flow Pro search to get METAR information for the given ICAO code.
@@ -795,6 +795,7 @@ search(prefixes, (query, callback) => {
                     return;
                 }
                 debug_on && console.log('Airport found: ' + airports[0].lat + ' - ' + airports[0].lon);
+                // debug_on && console.log(JSON.stringify(airports[0], null, 2));
 
                 this.airport = airports[0];
                 this.$api.weather.find_metar_from_coords(this.airport.lat, this.airport.lon, (metar_callback) => {
@@ -1148,6 +1149,26 @@ function drawWindSpeed(cx, cy, angleRad, arrowLength, speed, color = "red") {
     this.ctx.restore();
 }
 
+function drawHelipad(cx, cy, r) {
+    const hx = cx;
+    const hy = cy + r * 0.6 - 10;
+    const hr = 18;
+
+    this.ctx.save();
+    this.ctx.beginPath();
+    this.ctx.arc(hx, hy, hr, 0, 2 * Math.PI);
+    this.ctx.strokeStyle = "#FFF";
+    this.ctx.lineWidth = 2;
+    this.ctx.stroke();
+
+    this.ctx.font = "bold 22px sans-serif";
+    this.ctx.fillStyle = "#FFF";
+    this.ctx.textAlign = "center";
+    this.ctx.textBaseline = "middle";
+    this.ctx.fillText("H", hx, hy);
+    this.ctx.restore();
+}
+
 function drawWind(cx, cy, r, wind, length = 40) {
     let color = "red", fillColor = "rgba(255,90,90,0.25)";
 
@@ -1421,6 +1442,9 @@ function doRender() {
         if (this.airport) {
             for (const runway of this.airport.runways) {
                 drawRunway.call(this, cx, cy, radius - 30, runway, this.airport.icao); // ok
+            }
+            if (this.airport.airportClass === 4) {
+                drawHelipad.call(this, cx, cy, radius);
             }
         }
         drawWind.call(this, cx, cy, radius, this.metar.wind, 50); // ok
