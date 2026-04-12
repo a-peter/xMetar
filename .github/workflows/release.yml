@@ -1,0 +1,36 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Extract version from tag
+        id: version
+        run: echo "VERSION=${GITHUB_REF_NAME#v}" >> $GITHUB_OUTPUT
+
+      - name: Build package
+        run: node .github/scripts/build.js "${{ steps.version.outputs.VERSION }}"
+
+      - name: Zip package
+        run: |
+          cd dist
+          zip -r "../p42-util-flow-ape42_3060-xmetar-${{ steps.version.outputs.VERSION }}.zip" \
+              "p42-util-flow-ape42_3060-xmetar/"
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2.6.1
+        with:
+          name: "xMETAR ${{ steps.version.outputs.VERSION }}"
+          generate_release_notes: true
+          files: "p42-util-flow-ape42_3060-xmetar-${{ steps.version.outputs.VERSION }}.zip"
